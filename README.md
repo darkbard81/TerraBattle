@@ -12,4 +12,5 @@
 ## Repository Principles
 
 - [Basic Rule](docs/core_definition.md)
+- [Resolution Rule](docs/resolution_rule.md)
   
