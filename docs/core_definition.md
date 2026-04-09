@@ -25,6 +25,13 @@
 - If the tile beyond the crossed boundary contains an ally, the result is `swap`.
 - If the tile beyond the crossed boundary is blocked terrain or contains an enemy, the result is `block`.
 
+### Combat rules
+- Combat is resolved after the player’s drag is finalized.
+- Combat is evaluated from the final grid state, not during continuous drag motion.
+- An enemy is attacked when it is horizontally or vertically sandwiched by allied units.
+- Direct attack is not the default rule; sandwich formation is the main attack rule.
+- The final board arrangement is the basis for battle resolution.
+  
 ## Design note
 
 The board state remains grid-based.
