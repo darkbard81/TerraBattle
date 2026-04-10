@@ -47,6 +47,7 @@ Prefer code that is explicit, typed, domain-oriented, and easy to maintain.
 - Add `@example` for domain APIs when the usage is not obvious.
 - Do not duplicate obvious type information in prose.
 - Keep comments aligned with actual behavior; update TSDoc when implementation changes.
+- Write TSDoc comment text in Korean.
 
 ## API shape rules
 
