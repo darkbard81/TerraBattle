@@ -1,16 +1,21 @@
-import type { JSX } from "react";
-import { CreateTitleScreenState } from "../title/application/CreateTitleScreenState.js";
-import { TitleScreen } from "../title/presentation/TitleScreen.js";
-
-const createTitleScreenState = new CreateTitleScreenState();
+import React, { useReducer } from "react";
+import { GameShell } from "./GameShell.js";
+import {
+  createInitialGameState,
+  gameStateReducer,
+} from "../game/state/GameStateReducer.js";
 
 /**
- * 앱의 최상위 진입 화면을 렌더링한다.
+ * 애플리케이션의 최상위 루트다.
  *
- * @returns 타이틀 화면 컴포넌트
+ * @returns 전역 게임 상태를 소유한 앱 루트
  */
-export function App(): JSX.Element {
-  const titleScreenState = createTitleScreenState.execute();
+export function App(): React.ReactElement {
+  const [gameState, dispatch] = useReducer(
+    gameStateReducer,
+    undefined,
+    createInitialGameState,
+  );
 
-  return <TitleScreen state={titleScreenState} />;
+  return <GameShell gameState={gameState} dispatch={dispatch} />;
 }

@@ -5,8 +5,9 @@
 ## Implementation Rules
 
 - 게임 규칙 로직과 렌더링 로직을 섞지 않는다.
-- PixiJS는 월드 렌더링 중심으로 사용한다.
-- React는 HUD와 앱 UI 중심으로 사용한다.
+- React: 장면 전환, UI, 상태관리
+- Pixi: 각 장면 안의 맵/유닛/이펙트 렌더링
+- @pixi/react: React 컴포넌트 트리와 Pixi 장면을 연결
 - 상태의 진실은 도메인/게임 상태에 두고 표현 계층은 이를 반영만 한다.
 
 ## Project rules
