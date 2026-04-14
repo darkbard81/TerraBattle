@@ -44,7 +44,7 @@
 * Multi-Hit: 최종 데미지를 X번 적용한다.
 * Multi-Hit 명중 판정: 각 타격은 개별적으로 명중률을 계산하고 판정한다.
 * 복합공격: PATK / MATK 복합공격은 물리타와 마법타가 섞인 Multi-Hit으로 계산한다.
-* 자세한 내용은 [Skill Core Structure참조](docs/skill_core_structure.md)
+* 자세한 내용은 [Skill Core Structure참조](../docs/skill_core_structure.md)
 
 # 전투 계산 순서
 
