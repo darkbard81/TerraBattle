@@ -288,3 +288,44 @@
 스킬은
 **“슬롯에 장착되고, 확률로 발동되며, 순차적으로 해결되는 `damage / buff / debuff / heal` 효과 객체”**
 로 정의한다.
+
+## Example
+
+```json
+[
+  {
+    "id": "skill_basic_physical_attack",
+    "name": "기본 물리공격",
+    "replaceable": false,
+    "proc_chance": 100,
+    "effect_type": "damage",
+    "attack_type": "physical",
+    "target_side": "enemy",
+    "source_stat": "STR",
+    "affected_stat": null,
+    "multiplier": 1.0,
+    "hit_count": 1,
+    "duration_turns": 0,
+    "composite_hits": null,
+    "description": "적 1명에게 STR 1.0배의 물리 피해를 1회 준다.",
+    "animaiton_id": "animation_001"
+  },
+  {
+    "id": "skill_basic_magical_attack",
+    "name": "기본 마법공격",
+    "replaceable": false,
+    "proc_chance": 100,
+    "effect_type": "damage",
+    "attack_type": "magical",
+    "target_side": "enemy",
+    "source_stat": "INT",
+    "affected_stat": null,
+    "multiplier": 1.0,
+    "hit_count": 1,
+    "duration_turns": 0,
+    "composite_hits": null,
+    "description": "적 1명에게 INT 1.0배의 마법 피해를 1회 준다.",
+    "animaiton_id": "animation_002"
+  }
+]
+```
