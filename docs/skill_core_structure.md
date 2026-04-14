@@ -6,20 +6,13 @@
 
 * `name`: 스킬 이름
 
-* `slot`: 장착 슬롯 번호
-
-  * `1` = 기본스킬
-  * `2~4` = 교체형 스킬
-
 * `replaceable`: 교체 가능 여부
 
-  * `slot 1` = `false`
-  * `slot 2~4` = `true`
+  * true / false
 
 * `proc_chance`: 발동 확률
 
-  * `slot 1` 기본스킬은 `100`
-  * `slot 2~4`는 개별 확률값 사용
+  * 1% ~ 100%
 
 * `effect_type`: 스킬 효과 종류
 
@@ -197,7 +190,6 @@
 
 * `id`
 * `name`
-* `slot`
 * `replaceable`
 * `proc_chance`
 * `effect_type`
