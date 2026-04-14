@@ -28,10 +28,10 @@
 * 마법 명중률 계산은 MHIT vs MEVA를 사용한다.
 * 물리 데미지 계산은 PATK vs PDEF를 사용한다.
 * 마법 데미지 계산은 MATK vs MDEF를 사용한다.
-* 물리 명중률 = FLOOR(MIN(100, MAX(1, 50 + (아군 PHIT - 적 PEVA) + ((아군 LUK - 적 LUK) / 4))))
-* 마법 명중률 = FLOOR(MIN(100, MAX(1, 50 + (아군 MHIT - 적 MEVA) + ((아군 LUK - 적 LUK) / 4))))
-* 물리 데미지 = MAX(PATK - PDEF, FLOOR(MAX(1, (아군 LUK - 적 LUK) / 4)))
-* 마법 데미지 = MAX(MATK - MDEF, FLOOR(MAX(1, (아군 LUK - 적 LUK) / 4)))
+* 물리 명중률 = FLOOR(MIN(100, MAX(1, (아군 PHIT - 적 PEVA) + (아군 LUK / 2))))
+* 마법 명중률 = FLOOR(MIN(100, MAX(1, (아군 MHIT - 적 MEVA) + (아군 LUK / 2))))
+* 물리 데미지 = FLOOR(MAX(1, (아군 PATK - 적 PDEF + (아군 LUK / 2))))
+* 마법 데미지 = FLOOR(MAX(1, (아군 MATK - 적 MDEF + (아군 LUK / 2))))
 * 명중률의 최소값은 0, 최대값은 100으로 한다.
 * 소숫점은 버림 처리한다.
 
