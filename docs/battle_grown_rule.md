@@ -28,11 +28,12 @@
 * 마법 명중률 계산은 MHIT vs MEVA를 사용한다.
 * 물리 데미지 계산은 PATK vs PDEF를 사용한다.
 * 마법 데미지 계산은 MATK vs MDEF를 사용한다.
-* 물리 명중률 = FLOOR(MIN(100, MAX(1, (아군 PHIT - 적 PEVA) + (아군 LUK / 2))))
-* 마법 명중률 = FLOOR(MIN(100, MAX(1, (아군 MHIT - 적 MEVA) + (아군 LUK / 2))))
-* 물리 데미지 = FLOOR(MAX(1, (아군 PATK - 적 PDEF + (아군 LUK / 2))))
-* 마법 데미지 = FLOOR(MAX(1, (아군 MATK - 적 MDEF + (아군 LUK / 2))))
-* 명중률의 최소값은 0, 최대값은 100으로 한다.
+* 물리 명중률 = FLOOR(MIN(100, MAX(1, 60 + ((아군 PHIT - 적 PEVA) / 2) + ((아군 LUK - 적 LUK) / 4))))
+* 마법 명중률 = FLOOR(MIN(100, MAX(1, 60 + ((아군 MHIT - 적 MEVA) / 2) + ((아군 LUK - 적 LUK) / 4))))
+* 물리 데미지 = FLOOR(MAX(1, 18 + ((아군 PATK - 적 PDEF) / 2) + ((아군 LUK - 적 LUK) / 4)))
+* 마법 데미지 = FLOOR(MAX(1, 18 + ((아군 MATK - 적 MDEF) / 2) + ((아군 LUK - 적 LUK) / 4)))
+* 명중률의 최소값은 1, 최대값은 100으로 한다.
+* 데미지의 최소값은 1로 한다.
 * 소숫점은 버림 처리한다.
 
 # 스킬 계산법
@@ -59,21 +60,19 @@
 
 * 직업 기반 성장 대신 성장방식 기반 성장
 * LUK는 성장 제외
-* 레벨업 시 LUK를 제외한 8개 능력치에 총 80을 분배
-* 성장방식에 따라 80의 분배 비중이 달라진다.
+* 레벨업 시 선택한 성장방식의 실제 증가량을 적용한다.
+* 성장방식에 따라 능력치 상승 비중이 달라진다.
 
 # 성장방식 추천안
 
-* Power: STR 25 / VIT 20 / DEX 15 / AGI 5 / AVD 5 / INT 0 / MND 5 / RES 5
-* Technique: STR 5 / VIT 5 / DEX 25 / AGI 20 / AVD 15 / INT 0 / MND 5 / RES 5
-* Arcane: STR 0 / VIT 5 / DEX 5 / AGI 5 / AVD 5 / INT 25 / MND 20 / RES 15
-* Ward: STR 5 / VIT 15 / DEX 5 / AGI 5 / AVD 10 / INT 0 / MND 15 / RES 25
-* Balanced: STR 10 / VIT 10 / DEX 10 / AGI 10 / AVD 10 / INT 10 / MND 10 / RES 10
+* Power: STR +5 / VIT +4 / DEX +3 / AGI +1 / AVD +1 / INT +0 / MND +1 / RES +1
+* Technique: STR +1 / VIT +1 / DEX +5 / AGI +4 / AVD +3 / INT +0 / MND +1 / RES +1
+* Arcane: STR +0 / VIT +1 / DEX +1 / AGI +1 / AVD +1 / INT +5 / MND +4 / RES +3
+* Ward: STR +1 / VIT +3 / DEX +1 / AGI +1 / AVD +2 / INT +0 / MND +3 / RES +5
+* Balanced: STR +2 / VIT +2 / DEX +2 / AGI +2 / AVD +2 / INT +2 / MND +2 / RES +2
 
-# 경험치 구조
+# 경험치 구조처치 시 획득 경험치는 파티 평균 레벨을 기준으로 계산한다.
 
-* 경험치 획득은 전투 중 즉시 반영하지 않고, 스테이지 종료 후 일괄 계산한다.
-* 적 처치 시 획득 경험치는 파티 평균 레벨을 기준으로 계산한다.
 * 파티 평균 레벨은 출전 유닛 전원의 레벨 평균값으로 계산한다.
 * 적 레벨이 파티 평균 레벨보다 낮으면 획득 경험치는 무조건 1 EXP로 한다.
 * 적 레벨이 파티 평균 레벨과 같으면 획득 경험치는 10 EXP로 한다.
