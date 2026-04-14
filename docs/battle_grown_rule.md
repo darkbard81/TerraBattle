@@ -71,6 +71,13 @@
 * Ward: STR +1 / VIT +3 / DEX +1 / AGI +1 / AVD +2 / INT +0 / MND +3 / RES +5
 * Balanced: STR +2 / VIT +2 / DEX +2 / AGI +2 / AVD +2 / INT +2 / MND +2 / RES +2
 
+# HP 구조
+
+* 레벨 1 MaxHP의 기본값은 50로 시작한다.
+* 레벨업 시 MaxHP는 재계산하지 않고 누적 증가로 처리한다.
+* 레벨업할 때마다 FLOOR(VIT / 2)만큼 MaxHP를 추가한다.
+* 레벨업 시 HP 증가량 계산에 사용하는 VIT는 레벨업 후의 현재 VIT를 기준으로 한다.
+
 # 경험치 구조
 
 * 경험치 획득은 전투 중 즉시 반영하지 않고, 스테이지 종료 후 일괄 계산한다.
