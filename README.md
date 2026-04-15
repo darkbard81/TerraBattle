@@ -9,10 +9,17 @@
 - PixiJS
 - React HUD
 
+## Prerequisites
+
+- Node.js `^20.19.0 || >=22.12.0`
+- npm
+
 ## Repository Principles
 
 - [Basic Rule](docs/core_definition.md)
 - [Resolution Rule](docs/resolution_rule.md)
+- [RoadMap](RoadMap.md)
+- [Architecture](docs/architecture.md)
 
 ## Current Bootstrap
 
@@ -22,7 +29,18 @@
 
 ## Commands
 
+- `npm install`
 - `npm run dev`
-- `npm run build`
 - `npm run typecheck`
-- `npm test`
+- `npm run test`
+- `npm run test:run`
+- `npm run build`
+- `npm run preview`
+
+## Recommended verification order
+
+1. `npm install`
+2. `npm run dev`
+3. `npm run test:run`
+4. `npm run typecheck`
+5. `npm run build`
