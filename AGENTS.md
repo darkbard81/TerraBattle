@@ -9,6 +9,12 @@
 - Pixi: 각 장면 안의 맵/유닛/이펙트 렌더링
 - @pixi/react: React 컴포넌트 트리와 Pixi 장면을 연결
 - 상태의 진실은 도메인/게임 상태에 두고 표현 계층은 이를 반영만 한다.
+- Pixi `Application`은 앱 루트에서 가능한 한 하나만 유지하고, 장면 전환 시에는 내부 레이어를 교체한다.
+- 장면은 `Scene`, `Layer`, `HUD` 역할로 분리한다.
+- Pixi 레이어와 React HUD는 분리하되, 같은 장면 단위에서 함께 조합할 수 있어야 한다.
+- 장면 전환, 턴, 선택 상태, 모달, 메뉴 열림 같은 논리 상태는 React state / reducer / store에서 관리한다.
+- 좌표 보간, 파티클, 카메라 흔들림, 짧은 이펙트 진행도처럼 초당 자주 바뀌는 값 전체를 React state에만 몰아넣지 않는다.
+- 고빈도 프레임 갱신 값은 Pixi 렌더 루프 또는 장면 내부 상태에서 처리하고, React에는 의미 있는 게임 상태만 반영한다.
 
 ## Project rules
 
@@ -63,6 +69,27 @@ src/
       UserService.types.ts
     infrastructure/
       UserRepository.ts
+
+Preferred scene-oriented example:
+
+src/
+  app/
+    App.tsx
+    GameShell.tsx
+  game/
+    state/
+      GameState.types.ts
+      GameStateReducer.ts
+  scene/
+    title/
+      TitleScene.ts
+      TitleScene.types.ts
+      TitleLayer.tsx
+      TitleHUD.tsx
+    battle/
+      BattleScene.ts
+      BattleLayer.tsx
+      BattleHUD.tsx
 
 ## ESM rules
 
