@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "terrabattle://schema/dialogue.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "start_node_id", "nodes"],
+  "properties": {
+    "id": { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" },
+    "name": { "type": "string", "minLength": 1 },
+    "start_node_id": { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type"],
+        "properties": {
+          "id": { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" },
+          "type": {
+            "type": "string",
+            "enum": ["line", "choice", "jump", "end", "setFlag"]
+          },
+          "speaker": { "type": "string" },
+          "text": { "type": "string" },
+          "next": { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" },
+          "target": { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" },
+          "flag_key": { "type": "string" },
+          "flag_value": {
+            "oneOf": [{ "type": "boolean" }, { "type": "number" }, { "type": "string" }]
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["text", "next"],
+              "properties": {
+                "text": { "type": "string", "minLength": 1 },
+                "next": { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "extensions": { "type": "object" }
+  }
+}

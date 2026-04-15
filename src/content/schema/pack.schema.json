@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "terrabattle://schema/pack.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["meta", "files"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pack_id", "schema_version", "tool_version"],
+      "properties": {
+        "pack_id": { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" },
+        "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "tool_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skills", "characters", "maps", "dialogues"],
+      "properties": {
+        "skills": { "type": "string", "minLength": 1 },
+        "characters": { "type": "string", "minLength": 1 },
+        "maps": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "dialogues": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

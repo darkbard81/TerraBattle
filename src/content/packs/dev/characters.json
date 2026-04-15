@@ -1,0 +1,60 @@
+[
+  {
+    "id": "char_hero_001",
+    "name": "샘플 히어로",
+    "description": "개발용 히어로",
+    "image_path": "assets/characters/sample_hero.png",
+    "tile_x": 0,
+    "tile_y": 0,
+    "tile_w": 1,
+    "tile_h": 1,
+    "level": 1,
+    "exp": 0,
+    "skill_slots": {
+      "1": "skill_basic_attack",
+      "2": "skill_guard_boost",
+      "3": null,
+      "4": null
+    },
+    "STR": 50,
+    "VIT": 50,
+    "DEX": 50,
+    "AGI": 50,
+    "AVD": 50,
+    "INT": 50,
+    "MND": 50,
+    "RES": 50,
+    "LUK": 50,
+    "current_grown_type": "Balanced",
+    "HP": 55
+  },
+  {
+    "id": "char_enemy_001",
+    "name": "샘플 적",
+    "description": "개발용 적 유닛",
+    "image_path": "assets/characters/sample_enemy.png",
+    "tile_x": 1,
+    "tile_y": 0,
+    "tile_w": 1,
+    "tile_h": 1,
+    "level": 1,
+    "exp": 0,
+    "skill_slots": {
+      "1": "skill_basic_attack",
+      "2": null,
+      "3": null,
+      "4": null
+    },
+    "STR": 50,
+    "VIT": 50,
+    "DEX": 50,
+    "AGI": 50,
+    "AVD": 50,
+    "INT": 50,
+    "MND": 50,
+    "RES": 50,
+    "LUK": 50,
+    "current_grown_type": "Power",
+    "HP": 55
+  }
+]

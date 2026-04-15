@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "terrabattle://schema/skill.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "replaceable",
+    "proc_chance",
+    "effect_type",
+    "attack_type",
+    "target_side",
+    "source_stat",
+    "multiplier",
+    "hit_count",
+    "duration_turns",
+    "description"
+  ],
+  "properties": {
+    "id": { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" },
+    "name": { "type": "string", "minLength": 1 },
+    "replaceable": { "type": "boolean" },
+    "proc_chance": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "effect_type": { "type": "string", "enum": ["damage", "buff", "debuff", "heal"] },
+    "attack_type": { "type": "string", "enum": ["physical", "magical", "auto"] },
+    "target_side": { "type": "string", "enum": ["self", "ally", "enemy"] },
+    "source_stat": { "$ref": "terrabattle://schema/common.schema.json#/$defs/StatKey" },
+    "affected_stat": {
+      "oneOf": [
+        { "$ref": "terrabattle://schema/common.schema.json#/$defs/StatKey" },
+        { "type": "null" }
+      ]
+    },
+    "multiplier": { "type": "number", "exclusiveMinimum": 0 },
+    "hit_count": { "type": "integer", "minimum": 1 },
+    "duration_turns": { "type": "integer", "minimum": 0 },
+    "composite_hits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["attack_type", "source_stat", "multiplier", "hit_count"],
+        "properties": {
+          "attack_type": { "type": "string", "enum": ["physical", "magical", "auto"] },
+          "source_stat": { "$ref": "terrabattle://schema/common.schema.json#/$defs/StatKey" },
+          "multiplier": { "type": "number", "exclusiveMinimum": 0 },
+          "hit_count": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "description": { "type": "string" },
+    "extensions": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "effect_type": {
+            "enum": ["buff", "debuff"]
+          }
+        },
+        "required": ["effect_type"]
+      },
+      "then": {
+        "required": ["affected_stat"],
+        "properties": {
+          "affected_stat": {
+            "$ref": "terrabattle://schema/common.schema.json#/$defs/StatKey"
+          }
+        }
+      }
+    }
+  ]
+}
