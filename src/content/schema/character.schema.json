@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "terrabattle://schema/character.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "description",
+    "image_path",
+    "tile_x",
+    "tile_y",
+    "tile_w",
+    "tile_h",
+    "level",
+    "exp",
+    "skill_slots",
+    "STR",
+    "VIT",
+    "DEX",
+    "AGI",
+    "AVD",
+    "INT",
+    "MND",
+    "RES",
+    "LUK",
+    "current_grown_type",
+    "HP"
+  ],
+  "properties": {
+    "id": { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "image_path": { "type": "string", "minLength": 1 },
+    "tile_x": { "type": "integer", "minimum": 0 },
+    "tile_y": { "type": "integer", "minimum": 0 },
+    "tile_w": { "type": "integer", "minimum": 1 },
+    "tile_h": { "type": "integer", "minimum": 1 },
+    "level": { "type": "integer", "minimum": 1 },
+    "exp": { "type": "integer", "minimum": 0 },
+    "skill_slots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["1", "2", "3", "4"],
+      "properties": {
+        "1": {
+          "oneOf": [
+            { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" },
+            { "type": "null" }
+          ]
+        },
+        "2": {
+          "oneOf": [
+            { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" },
+            { "type": "null" }
+          ]
+        },
+        "3": {
+          "oneOf": [
+            { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" },
+            { "type": "null" }
+          ]
+        },
+        "4": {
+          "oneOf": [
+            { "$ref": "terrabattle://schema/common.schema.json#/$defs/Id" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "STR": { "type": "integer", "minimum": 1 },
+    "VIT": { "type": "integer", "minimum": 1 },
+    "DEX": { "type": "integer", "minimum": 1 },
+    "AGI": { "type": "integer", "minimum": 1 },
+    "AVD": { "type": "integer", "minimum": 1 },
+    "INT": { "type": "integer", "minimum": 1 },
+    "MND": { "type": "integer", "minimum": 1 },
+    "RES": { "type": "integer", "minimum": 1 },
+    "LUK": { "type": "integer", "minimum": 1 },
+    "current_grown_type": {
+      "$ref": "terrabattle://schema/common.schema.json#/$defs/GrowthType"
+    },
+    "HP": { "type": "integer", "minimum": 1 },
+    "extensions": { "type": "object" }
+  }
+}

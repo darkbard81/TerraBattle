@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "terrabattle://schema/common.schema.json",
+  "$defs": {
+    "Id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$"
+    },
+    "StatKey": {
+      "type": "string",
+      "enum": ["STR", "VIT", "DEX", "AGI", "AVD", "INT", "MND", "RES", "LUK"]
+    },
+    "GrowthType": {
+      "type": "string",
+      "enum": ["Power", "Technique", "Arcane", "Ward", "Balanced"]
+    },
+    "TileCoord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer", "minimum": 0 },
+        "y": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
