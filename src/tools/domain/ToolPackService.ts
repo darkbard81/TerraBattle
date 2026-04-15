@@ -4,7 +4,6 @@ import type {
   SkillDef,
   ValidationIssue,
 } from "../../content/domain/ContentSchema.types.js";
-import { canonicalizeJson } from "../../content/runtime/canonicalizeJson.js";
 import { ContentIntegrityChecker } from "../../content/runtime/ContentIntegrityChecker.js";
 import { ContentValidator } from "../../content/runtime/ContentValidator.js";
 
@@ -58,7 +57,7 @@ export class ToolPackService {
   }
 
   /**
-   * 편집된 스킬/캐릭터를 canonical JSON 문자열로 직렬화한다.
+   * 편집된 스킬/캐릭터를 파일 저장용 JSON 문자열로 직렬화한다.
    *
    * @param skills 직렬화할 스킬 목록
    * @param characters 직렬화할 캐릭터 목록
@@ -66,8 +65,57 @@ export class ToolPackService {
    */
   public export(skills: readonly SkillDef[], characters: readonly CharacterDef[]): ToolExportResult {
     return {
-      skillsJson: canonicalizeJson(skills),
-      charactersJson: canonicalizeJson(characters),
+      skillsJson: JSON.stringify(skills.map((skill) => orderSkillForExport(skill)), null, 2),
+      charactersJson: JSON.stringify(
+        characters.map((character) => orderCharacterForExport(character)),
+        null,
+        2,
+      ),
     };
   }
+}
+
+function orderSkillForExport(skill: SkillDef): SkillDef {
+  return {
+    id: skill.id,
+    name: skill.name,
+    replaceable: skill.replaceable,
+    proc_chance: skill.proc_chance,
+    effect_type: skill.effect_type,
+    attack_type: skill.attack_type,
+    target_side: skill.target_side,
+    source_stat: skill.source_stat,
+    affected_stat: skill.affected_stat,
+    multiplier: skill.multiplier,
+    hit_count: skill.hit_count,
+    duration_turns: skill.duration_turns,
+    description: skill.description,
+  };
+}
+
+function orderCharacterForExport(character: CharacterDef): CharacterDef {
+  return {
+    id: character.id,
+    name: character.name,
+    description: character.description,
+    image_path: character.image_path,
+    tile_x: character.tile_x,
+    tile_y: character.tile_y,
+    tile_w: character.tile_w,
+    tile_h: character.tile_h,
+    level: character.level,
+    exp: character.exp,
+    skill_slots: character.skill_slots,
+    STR: character.STR,
+    VIT: character.VIT,
+    DEX: character.DEX,
+    AGI: character.AGI,
+    AVD: character.AVD,
+    INT: character.INT,
+    MND: character.MND,
+    RES: character.RES,
+    LUK: character.LUK,
+    current_grown_type: character.current_grown_type,
+    HP: character.HP,
+  };
 }

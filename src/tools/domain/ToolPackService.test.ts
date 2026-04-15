@@ -73,11 +73,13 @@ describe("ToolPackService", () => {
     expect(issues.some((issue) => issue.severity === "error")).toBe(false);
   });
 
-  it("export는 canonical JSON 문자열을 반환한다", () => {
+  it("export는 id를 먼저 표시하는 JSON 문자열을 반환한다", () => {
     const service = new ToolPackService();
     const result = service.export(BASE_PACK.skills, BASE_PACK.characters);
 
-    expect(result.skillsJson).toContain('"id":"skill_basic"');
-    expect(result.charactersJson).toContain('"id":"char_base"');
+    expect(result.skillsJson).toContain('"id": "skill_basic"');
+    expect(result.skillsJson.trimStart().startsWith('[\n  {\n    "id"')).toBe(true);
+    expect(result.charactersJson).toContain('"id": "char_base"');
+    expect(result.charactersJson.trimStart().startsWith('[\n  {\n    "id"')).toBe(true);
   });
 });

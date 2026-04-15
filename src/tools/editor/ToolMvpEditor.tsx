@@ -151,6 +151,22 @@ export function ToolMvpEditor(): React.ReactElement {
           : skill,
       ),
     );
+
+    if (key === "id") {
+      const nextSkillId = value as string;
+      setCharacters((previous) =>
+        previous.map((character) => ({
+          ...character,
+          skill_slots: {
+            "1": character.skill_slots["1"] === selectedSkillId ? nextSkillId : character.skill_slots["1"],
+            "2": character.skill_slots["2"] === selectedSkillId ? nextSkillId : character.skill_slots["2"],
+            "3": character.skill_slots["3"] === selectedSkillId ? nextSkillId : character.skill_slots["3"],
+            "4": character.skill_slots["4"] === selectedSkillId ? nextSkillId : character.skill_slots["4"],
+          },
+        })),
+      );
+      setSelectedSkillId(nextSkillId);
+    }
   };
 
   const onCharacterChange = <K extends keyof CharacterDef>(
@@ -171,6 +187,10 @@ export function ToolMvpEditor(): React.ReactElement {
           : character,
       ),
     );
+
+    if (key === "id") {
+      setSelectedCharacterId(value as string);
+    }
   };
 
   const onSkillSlotChange = (slotKey: "1" | "2" | "3" | "4", value: string): void => {

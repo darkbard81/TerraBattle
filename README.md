@@ -31,6 +31,7 @@
 
 - `npm install`
 - `npm run dev`
+- `npm run editor`
 - `npm run typecheck`
 - `npm run test`
 - `npm run test:run`
