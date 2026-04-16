@@ -13,7 +13,7 @@
     "exp": 0,
     "skill_slots": {
       "1": "skill_basic_attack",
-      "2": null,
+      "2": "skill_multi_attack",
       "3": null,
       "4": null
     },
@@ -43,7 +43,7 @@
     "exp": 0,
     "skill_slots": {
       "1": "skill_basic_attack",
-      "2": null,
+      "2": "skill_multi_attack",
       "3": null,
       "4": null
     },

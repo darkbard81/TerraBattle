@@ -141,6 +141,211 @@ button {
   text-align: right;
 }
 
+.map-scene__damage-layer {
+  --map-scene-sandwich-attack-duration: 1050ms;
+  --map-scene-sandwich-attack-stagger: 160ms;
+  --map-scene-skill-name-duration: 1050ms;
+  --map-scene-skill-name-stagger: 80ms;
+  --map-scene-damage-text-duration: 1600ms; /*900ms;*/
+  --map-scene-damage-text-stagger: 180ms; /*90ms;*/
+
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.map-scene__damage-layer--input-lock {
+  cursor: wait;
+  pointer-events: auto;
+}
+
+.map-scene__sandwich-attack {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.map-scene__sandwich-character {
+  position: absolute;
+  left: 0;
+  top: 0;
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.72));
+  max-height: 720px;
+  max-width: 640px;
+  object-fit: contain;
+  opacity: 0;
+  transform-origin: center bottom;
+  user-select: none;
+  width: 480px;
+  animation-duration: var(--map-scene-sandwich-attack-duration);
+  animation-fill-mode: forwards;
+  animation-timing-function: cubic-bezier(0.2, 0.72, 0.18, 1);
+}
+
+.map-scene__sandwich-character--left {
+  transform: translate(calc(-50% - 360px), -50%)
+    scale(var(--map-scene-sandwich-character-scale));
+  animation-name: map-scene-sandwich-character-left;
+}
+
+.map-scene__sandwich-character--right {
+  transform: translate(calc(-50% + 360px), -50%)
+    scale(var(--map-scene-sandwich-character-scale));
+  animation-name: map-scene-sandwich-character-right;
+}
+
+.map-scene__skill-name-box {
+  position: absolute;
+  min-width: 160px;
+  max-width: 300px;
+  min-height: 44px;
+  border: 1px solid rgba(246, 241, 231, 0.75);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.68);
+  color: #f6f1e7;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.15;
+  opacity: 0;
+  overflow-wrap: anywhere;
+  padding: 10px 16px;
+  text-align: center;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+  transform: translate(-50%, -130%) scale(0.94);
+  animation: map-scene-skill-name-box var(--map-scene-skill-name-duration) ease-out forwards;
+}
+
+.map-scene__skill-name-text {
+  display: block;
+}
+
+.map-scene__skill-name-text + .map-scene__skill-name-text {
+  margin-top: 4px;
+}
+
+.map-scene__damage-text {
+  position: absolute;
+  color: #ff6b5f;
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  opacity: 0;
+  text-align: center;
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.85),
+    0 0 12px rgba(255, 255, 255, 0.5);
+  transform: translate(-50%, -50%);
+  animation: map-scene-damage-text var(--map-scene-damage-text-duration) ease-out forwards;
+}
+
+.map-scene__damage-text--miss {
+  color: #d8e5ff;
+  font-size: 38px;
+}
+
+@keyframes map-scene-sandwich-character-left {
+  0% {
+    opacity: 0;
+    transform: translate(calc(-50% - 360px), -44%)
+      scale(var(--map-scene-sandwich-character-scale-enter));
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  48% {
+    opacity: 1;
+    transform: translate(calc(-50% - 68px), -54%)
+      scale(var(--map-scene-sandwich-character-scale-near));
+  }
+
+  62% {
+    opacity: 1;
+    transform: translate(calc(-50% - 34px), -55%)
+      scale(var(--map-scene-sandwich-character-scale-impact));
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% - 430px), -66%)
+      scale(var(--map-scene-sandwich-character-scale-exit));
+  }
+}
+
+@keyframes map-scene-sandwich-character-right {
+  0% {
+    opacity: 0;
+    transform: translate(calc(-50% + 360px), -44%)
+      scale(var(--map-scene-sandwich-character-scale-enter));
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  48% {
+    opacity: 1;
+    transform: translate(calc(-50% + 68px), -54%)
+      scale(var(--map-scene-sandwich-character-scale-near));
+  }
+
+  62% {
+    opacity: 1;
+    transform: translate(calc(-50% + 34px), -55%)
+      scale(var(--map-scene-sandwich-character-scale-impact));
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + 430px), -66%)
+      scale(var(--map-scene-sandwich-character-scale-exit));
+  }
+}
+
+@keyframes map-scene-skill-name-box {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -115%) scale(0.92);
+  }
+
+  16% {
+    opacity: 1;
+    transform: translate(-50%, -136%) scale(1);
+  }
+
+  72% {
+    opacity: 1;
+    transform: translate(-50%, -146%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -168%) scale(0.98);
+  }
+}
+
+@keyframes map-scene-damage-text {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -30%) scale(0.85);
+  }
+
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -60%) scale(1.1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -135%) scale(1);
+  }
+}
+
 .map-scene__pixi-layer {
   position: absolute;
   inset: 0;

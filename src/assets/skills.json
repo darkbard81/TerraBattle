@@ -15,6 +15,21 @@
     "description": "기본 물리 공격"
   },
   {
+    "id": "skill_multi_attack",
+    "name": "멀티 공격",
+    "replaceable": false,
+    "proc_chance": 80,
+    "effect_type": "damage",
+    "attack_type": "physical",
+    "target_side": "enemy",
+    "source_stat": "STR",
+    "affected_stat": null,
+    "multiplier": 1,
+    "hit_count": 5,
+    "duration_turns": 0,
+    "description": "기본 물리 공격"
+  },
+  {
     "id": "skill_guard_boost",
     "name": "가드 부스트",
     "replaceable": true,

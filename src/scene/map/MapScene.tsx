@@ -11,12 +11,29 @@ import {
 } from "pixi.js";
 import charactersData from "../../assets/characters.json";
 import mapDemoData from "../../assets/map_demo.json";
+import skillsData from "../../assets/skills.json";
 import { resolveAssetUrl } from "../../assets/assetUrls.js";
+import {
+  ResolveTurnEndUseCase,
+  type BattleCharacterData,
+  type BattleSkillData,
+  type TurnEndBoardUnit,
+} from "../../game/application/ResolveTurnEndUseCase.js";
 import {
   VIRTUAL_STAGE_HEIGHT,
   VIRTUAL_STAGE_WIDTH,
   VirtualStage,
 } from "../../shared/display/VirtualStage.js";
+import {
+  BattleAnimationQueue,
+  emptyBattleAnimationQueueState,
+  type BattleAnimationStagePosition,
+  type BattleAnimationDurations,
+  type QueueDamageTextAnimationInput,
+  type QueueSandwichAttackAnimationInput,
+  type QueueSkillNameAnimationInput,
+  type SandwichCharacterAnimation,
+} from "./BattleAnimationQueue.js";
 
 extend({
   Container,
@@ -32,6 +49,14 @@ const DRAG_SYNC_MAX_STEP = 36;
 const DRAG_SYNC_EPSILON = 0.5;
 const SWAP_ANIMATION_DURATION_MS = 120;
 const TILE_RENDER_RATIO = 1;
+const DAMAGE_TEXT_DURATION_CSS_VARIABLE = "--map-scene-damage-text-duration";
+const DAMAGE_TEXT_STAGGER_CSS_VARIABLE = "--map-scene-damage-text-stagger";
+const SANDWICH_ATTACK_DURATION_CSS_VARIABLE =
+  "--map-scene-sandwich-attack-duration";
+const SANDWICH_ATTACK_STAGGER_CSS_VARIABLE =
+  "--map-scene-sandwich-attack-stagger";
+const SKILL_NAME_DURATION_CSS_VARIABLE = "--map-scene-skill-name-duration";
+const SKILL_NAME_STAGGER_CSS_VARIABLE = "--map-scene-skill-name-stagger";
 
 /**
  * 맵 셀 배치 정보다.
@@ -64,15 +89,17 @@ interface MapDemoDocument {
 /**
  * 캐릭터와 오브젝트 타일 정의다.
  */
-interface CharacterTileData {
-  readonly id: string;
-  readonly name: string;
-  readonly type: string;
+interface CharacterTileData extends BattleCharacterData {
+  readonly description: string;
   readonly image_path: string;
   readonly tile_x: number;
   readonly tile_y: number;
   readonly tile_w: number;
   readonly tile_h: number;
+  readonly level: number;
+  readonly exp: number;
+  readonly current_grown_type: string;
+  readonly HP: number;
 }
 
 /**
@@ -95,6 +122,7 @@ interface MapEntity {
 
 const mapDemo = mapDemoData as MapDemoDocument;
 const characterTiles = charactersData as readonly CharacterTileData[];
+const battleSkills = skillsData as readonly BattleSkillData[];
 
 /**
  * 지정한 id와 일치하는 타일 정의를 찾는다.
@@ -106,6 +134,30 @@ function findCharacterTile(
   characterId: string,
 ): CharacterTileData | undefined {
   return characterTiles.find((characterTile) => characterTile.id === characterId);
+}
+
+/**
+ * 샌드위치 공격 연출에 사용할 캐릭터 이미지 정보를 만든다.
+ *
+ * @param characterId 캐릭터 id
+ * @param side 화면에서 출현할 좌우 방향
+ * @returns 연출 이미지 정보 또는 undefined
+ */
+function createSandwichCharacterAnimation(
+  characterId: string,
+  side: "left" | "right",
+): SandwichCharacterAnimation | undefined {
+  const characterTile = findCharacterTile(characterId);
+
+  if (characterTile === undefined) {
+    return undefined;
+  }
+
+  return {
+    imageUrl: resolveAssetUrl(characterTile.image_path),
+    scale: 1,
+    side,
+  };
 }
 
 /**
@@ -124,8 +176,9 @@ interface PixiMapLayerProps {
   readonly entities: readonly MapEntity[];
   readonly map: MapData;
   readonly dragTimeLimitSeconds: number;
-  readonly onEntitiesMove: (inputs: readonly MoveMapEntityInput[]) => void;
+  readonly isInputLocked: boolean;
   readonly onDragTimerChange: (remainingSeconds: number) => void;
+  readonly onTurnEnd: (inputs: readonly MoveMapEntityInput[]) => void;
 }
 
 /**
@@ -623,6 +676,39 @@ function easeOutCubic(progress: number): number {
   return 1 - (1 - progress) ** 3;
 }
 
+function parseCssTimeToMilliseconds(cssTime: string): number | undefined {
+  const value = cssTime.trim();
+
+  if (value.endsWith("ms")) {
+    const milliseconds = Number(value.slice(0, -2));
+
+    return Number.isFinite(milliseconds) ? milliseconds : undefined;
+  }
+
+  if (value.endsWith("s")) {
+    const seconds = Number(value.slice(0, -1));
+
+    return Number.isFinite(seconds) ? seconds * 1000 : undefined;
+  }
+
+  return undefined;
+}
+
+function readCssTimeVariable(
+  element: HTMLElement | null,
+  variableName: string,
+): number {
+  if (element === null) {
+    return 0;
+  }
+
+  return (
+    parseCssTimeToMilliseconds(
+      getComputedStyle(element).getPropertyValue(variableName),
+    ) ?? 0
+  );
+}
+
 /**
  * 렌더링 타일 목록에서 이동을 막는 충돌 영역만 추출한다.
  *
@@ -1118,7 +1204,7 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
     clearDragTimer();
     entityPositionsRef.current.set(activeDrag.instanceId, snappedPosition);
 
-    props.onEntitiesMove(
+    props.onTurnEnd(
       Array.from(entityPositionsRef.current.entries()).map(
         ([instanceId, position]) => ({
           instanceId,
@@ -1145,6 +1231,10 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
     swapAnimationsRef.current.delete(instanceId);
   }, []);
   const startDrag = useCallback((input: StartDragInput): void => {
+    if (props.isInputLocked) {
+      return;
+    }
+
     input.event.stopPropagation();
 
     const startedAt = performance.now();
@@ -1216,7 +1306,7 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
       width={VIRTUAL_STAGE_WIDTH}
     >
       <pixiContainer
-        eventMode="static"
+        eventMode={props.isInputLocked ? "none" : "static"}
         hitArea={stageHitArea}
         onPointerMove={moveDrag}
         onPointerUp={endDrag}
@@ -1227,7 +1317,7 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
           <PixiMapTile
             baseTexture={baseTextures.get(tile.imageUrl)}
             gridOrigin={gridOrigin}
-            isDraggable={isAllyTile(tile)}
+            isDraggable={!props.isInputLocked && isAllyTile(tile)}
             key={tile.entity.instanceId}
             onDragStart={startDrag}
             onSpriteMount={mountSprite}
@@ -1248,17 +1338,54 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
  */
 export function MapScene(props: MapSceneProps): React.ReactElement {
   const map = mapDemo.map;
+  const resolveTurnEndUseCase = useMemo(() => new ResolveTurnEndUseCase(), []);
   const [entities, setEntities] = useState<readonly MapEntity[]>(() =>
     createInitialMapEntities(map),
   );
   const [remainingDragSeconds, setRemainingDragSeconds] = useState(map.timer);
-  const moveEntities = useCallback((inputs: readonly MoveMapEntityInput[]): void => {
-    const nextPositionById = new Map(
-      inputs.map((input) => [input.instanceId, input] as const),
-    );
-
-    setEntities((currentEntities) =>
-      currentEntities.map((entity) => {
+  const [battleAnimationState, setBattleAnimationState] = useState(
+    emptyBattleAnimationQueueState,
+  );
+  const battleAnimationQueue = useMemo(
+    () => new BattleAnimationQueue(setBattleAnimationState),
+    [],
+  );
+  const damageLayerRef = useRef<HTMLDivElement>(null);
+  const readBattleAnimationDurations = useCallback(
+    (): BattleAnimationDurations => ({
+      damageTextDurationMs: readCssTimeVariable(
+        damageLayerRef.current,
+        DAMAGE_TEXT_DURATION_CSS_VARIABLE,
+      ),
+      damageTextStaggerMs: readCssTimeVariable(
+        damageLayerRef.current,
+        DAMAGE_TEXT_STAGGER_CSS_VARIABLE,
+      ),
+      sandwichAttackDurationMs: readCssTimeVariable(
+        damageLayerRef.current,
+        SANDWICH_ATTACK_DURATION_CSS_VARIABLE,
+      ),
+      sandwichAttackStaggerMs: readCssTimeVariable(
+        damageLayerRef.current,
+        SANDWICH_ATTACK_STAGGER_CSS_VARIABLE,
+      ),
+      skillNameDurationMs: readCssTimeVariable(
+        damageLayerRef.current,
+        SKILL_NAME_DURATION_CSS_VARIABLE,
+      ),
+      skillNameStaggerMs: readCssTimeVariable(
+        damageLayerRef.current,
+        SKILL_NAME_STAGGER_CSS_VARIABLE,
+      ),
+    }),
+    [],
+  );
+  const handleTurnEnd = useCallback(
+    (inputs: readonly MoveMapEntityInput[]): void => {
+      const nextPositionById = new Map(
+        inputs.map((input) => [input.instanceId, input] as const),
+      );
+      const nextEntities = entities.map((entity) => {
         const nextPosition = nextPositionById.get(entity.instanceId);
 
         return nextPosition !== undefined
@@ -1268,9 +1395,131 @@ export function MapScene(props: MapSceneProps): React.ReactElement {
               y: nextPosition.y,
             }
           : entity;
-      }),
-    );
-  }, []);
+      });
+      const units: readonly TurnEndBoardUnit[] = nextEntities.map((entity) => ({
+        characterId: entity.characterId,
+        instanceId: entity.instanceId,
+        x: entity.x,
+        y: entity.y,
+      }));
+      const turnResult = resolveTurnEndUseCase.execute({
+        characters: characterTiles,
+        random: Math.random,
+        skills: battleSkills,
+        units,
+      });
+      const gridOrigin = calculateGridOrigin(map);
+      const nextEntityById = new Map(
+        nextEntities.map((entity) => [entity.instanceId, entity] as const),
+      );
+      const sandwichAttacks: readonly QueueSandwichAttackAnimationInput[] =
+        turnResult.sandwichAttackEvents.flatMap((event) => {
+          const firstActor = createSandwichCharacterAnimation(
+            event.firstAttackerCharacterId,
+            "left",
+          );
+          const secondActor = createSandwichCharacterAnimation(
+            event.secondAttackerCharacterId,
+            "right",
+          );
+
+          if (firstActor === undefined || secondActor === undefined) {
+            return [];
+          }
+
+          return [
+            {
+              event,
+              firstActor,
+              secondActor,
+              stagePosition: calculateTileCenter(
+                {
+                  x: event.targetX,
+                  y: event.targetY,
+                },
+                gridOrigin,
+              ),
+            },
+          ];
+      });
+      const skillNameGroupByAttacker = new Map<
+        string,
+        {
+          readonly skillIds: Set<string>;
+          readonly skillNames: string[];
+          readonly stagePosition: BattleAnimationStagePosition;
+        }
+      >();
+
+      turnResult.hitResultEvents.forEach((event) => {
+        const attackerEntity = nextEntityById.get(event.attackerInstanceId);
+
+        if (attackerEntity === undefined) {
+          return;
+        }
+
+        const group =
+          skillNameGroupByAttacker.get(event.attackerInstanceId) ??
+          {
+            skillIds: new Set<string>(),
+            skillNames: [],
+            stagePosition: calculateTileCenter(attackerEntity, gridOrigin),
+          };
+
+        if (!skillNameGroupByAttacker.has(event.attackerInstanceId)) {
+          skillNameGroupByAttacker.set(event.attackerInstanceId, group);
+        }
+
+        if (group.skillIds.has(event.skillId)) {
+          return;
+        }
+
+        group.skillIds.add(event.skillId);
+        group.skillNames.push(event.skillName);
+      });
+
+      const skillNames: readonly QueueSkillNameAnimationInput[] = Array.from(
+        skillNameGroupByAttacker,
+        ([attackerInstanceId, group]) => ({
+          animationId: attackerInstanceId,
+          skillNames: group.skillNames,
+          stagePosition: group.stagePosition,
+        }),
+      );
+      const damageTexts: readonly QueueDamageTextAnimationInput[] =
+        turnResult.hitResultEvents.map((event) => ({
+          event,
+          stagePosition: calculateTileCenter(
+            {
+              x: event.targetX,
+              y: event.targetY,
+            },
+            gridOrigin,
+          ),
+        }));
+
+      setEntities(nextEntities);
+      battleAnimationQueue.enqueueTurnAnimations({
+        damageTexts,
+        durations: readBattleAnimationDurations(),
+        sandwichAttacks,
+        skillNames,
+      });
+    },
+    [
+      battleAnimationQueue,
+      entities,
+      map,
+      readBattleAnimationDurations,
+      resolveTurnEndUseCase,
+    ],
+  );
+
+  useEffect(() => {
+    return (): void => {
+      battleAnimationQueue.dispose();
+    };
+  }, [battleAnimationQueue]);
 
   return (
     <VirtualStage
@@ -1293,10 +1542,84 @@ export function MapScene(props: MapSceneProps): React.ReactElement {
       <PixiMapLayer
         dragTimeLimitSeconds={map.timer}
         entities={entities}
+        isInputLocked={battleAnimationState.isPlaying}
         map={map}
         onDragTimerChange={setRemainingDragSeconds}
-        onEntitiesMove={moveEntities}
+        onTurnEnd={handleTurnEnd}
       />
+      <div
+        className={
+          battleAnimationState.isPlaying
+            ? "map-scene__damage-layer map-scene__damage-layer--input-lock"
+            : "map-scene__damage-layer"
+        }
+        aria-hidden="true"
+        ref={damageLayerRef}
+      >
+        {battleAnimationState.sandwichAttackAnimations.map((animation) => (
+          <div
+            className="map-scene__sandwich-attack"
+            key={animation.animationId}
+            style={{
+              left: animation.stagePosition.x,
+              top: animation.stagePosition.y,
+            }}
+          >
+            {[animation.firstActor, animation.secondActor].map((actor) => (
+              <img
+                alt=""
+                className={`map-scene__sandwich-character map-scene__sandwich-character--${actor.side}`}
+                draggable={false}
+                key={`${animation.animationId}:${actor.side}`}
+                src={actor.imageUrl}
+                style={
+                  {
+                    "--map-scene-sandwich-character-scale": actor.scale,
+                    "--map-scene-sandwich-character-scale-enter": actor.scale * 0.82,
+                    "--map-scene-sandwich-character-scale-exit": actor.scale * 0.74,
+                    "--map-scene-sandwich-character-scale-impact": actor.scale * 1.12,
+                    "--map-scene-sandwich-character-scale-near": actor.scale * 1.04,
+                    animationDelay: `${animation.delayMs}ms`,
+                  } as React.CSSProperties
+                }
+              />
+            ))}
+          </div>
+        ))}
+        {battleAnimationState.skillNameAnimations.map((animation) => (
+          <div
+            className="map-scene__skill-name-box"
+            key={animation.animationId}
+            style={{
+              animationDelay: `${animation.delayMs}ms`,
+              left: animation.stagePosition.x,
+              top: animation.stagePosition.y,
+            }}
+          >
+            {animation.skillNames.map((skillName, index) => (
+              <span
+                className="map-scene__skill-name-text"
+                key={`${animation.animationId}:${index}`}
+              >
+                {skillName}
+              </span>
+            ))}
+          </div>
+        ))}
+        {battleAnimationState.damageTextAnimations.map((animation) => (
+          <span
+            className={`map-scene__damage-text map-scene__damage-text--${animation.result}`}
+            key={animation.animationId}
+            style={{
+              animationDelay: `${animation.delayMs}ms`,
+              left: animation.stagePosition.x,
+              top: animation.stagePosition.y,
+            }}
+          >
+            {animation.label}
+          </span>
+        ))}
+      </div>
     </VirtualStage>
   );
 }
