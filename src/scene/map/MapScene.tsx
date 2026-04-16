@@ -1,5 +1,5 @@
 import { Application, extend } from "@pixi/react";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Assets,
   Container,
@@ -25,8 +25,13 @@ extend({
 });
 
 const MAP_TILE_SIZE = 128;
+const COLLISION_INSET = 6;
 const MAP_GRID_GAP = 0;
-const TILE_RENDER_RATIO = 0.88;
+const DRAG_SYNC_EASING = 0.28;
+const DRAG_SYNC_MAX_STEP = 36;
+const DRAG_SYNC_EPSILON = 0.5;
+const SWAP_ANIMATION_DURATION_MS = 120;
+const TILE_RENDER_RATIO = 1;
 
 /**
  * 맵 셀 배치 정보다.
@@ -117,19 +122,20 @@ interface RenderableMapTile {
 interface PixiMapLayerProps {
   readonly entities: readonly MapEntity[];
   readonly map: MapData;
-  readonly onEntityMove: (input: MoveMapEntityInput) => void;
+  readonly onEntitiesMove: (inputs: readonly MoveMapEntityInput[]) => void;
 }
 
 /**
  * Pixi 타일 스프라이트 입력값이다.
  */
 interface PixiMapTileProps {
-  readonly activeDrag: ActiveDragState | undefined;
   readonly tile: RenderableMapTile;
   readonly baseTexture: Texture | undefined;
   readonly gridOrigin: { readonly x: number; readonly y: number };
   readonly isDraggable: boolean;
   readonly onDragStart: (input: StartDragInput) => void;
+  readonly onSpriteMount: (input: SpriteMountInput) => void;
+  readonly onSpriteUnmount: (instanceId: string) => void;
 }
 
 /**
@@ -147,19 +153,27 @@ interface MoveMapEntityInput {
 interface StartDragInput {
   readonly event: FederatedPointerEvent;
   readonly instanceId: string;
-  readonly spriteX: number;
-  readonly spriteY: number;
+  readonly sprite: Sprite;
+}
+
+/**
+ * Pixi 스프라이트 등록 입력값이다.
+ */
+interface SpriteMountInput {
+  readonly instanceId: string;
+  readonly sprite: Sprite;
 }
 
 /**
  * 현재 드래그 중인 엔티티 상태다.
  */
 interface ActiveDragState {
+  readonly grabOffsetX: number;
+  readonly grabOffsetY: number;
   readonly instanceId: string;
-  readonly offsetX: number;
-  readonly offsetY: number;
-  readonly pointerX: number;
-  readonly pointerY: number;
+  readonly sprite: Sprite;
+  readonly targetX: number;
+  readonly targetY: number;
 }
 
 /**
@@ -176,6 +190,35 @@ interface GridPosition {
 interface StagePosition {
   readonly x: number;
   readonly y: number;
+}
+
+/**
+ * Pixi 스테이지 사각형 영역이다.
+ */
+interface StageRect {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
+/**
+ * 이동을 막는 타일의 충돌 영역이다.
+ */
+interface BlockingTileBounds {
+  readonly instanceId: string;
+  readonly bounds: StageRect;
+}
+
+/**
+ * swap으로 이동 중인 타일 애니메이션 상태다.
+ */
+interface SwapAnimationState {
+  readonly from: StagePosition;
+  readonly instanceId: string;
+  readonly sprite: Sprite;
+  readonly startedAt: number;
+  readonly to: StagePosition;
 }
 
 /**
@@ -285,6 +328,63 @@ function snapStagePositionToGrid(
 }
 
 /**
+ * 타일 중심 좌표를 기준으로 128x128 충돌 영역을 계산한다.
+ *
+ * @param center 타일 중심 좌표
+ * @returns 타일 경계 사각형
+ */
+function calculateTileBounds(center: StagePosition, inset: number): StageRect {
+  const halfTileSize = MAP_TILE_SIZE / 2;
+
+  return {
+    bottom: center.y + halfTileSize - inset,
+    left: center.x - halfTileSize + inset,
+    right: center.x + halfTileSize - inset,
+    top: center.y - halfTileSize + inset,
+  };
+}
+
+/**
+ * 두 사각형이 겹치는지 확인한다.
+ *
+ * @param first 첫 번째 사각형
+ * @param second 두 번째 사각형
+ * @returns 두 사각형이 면적으로 겹치는지 여부
+ */
+function intersectsRect(first: StageRect, second: StageRect): boolean {
+  return (
+    first.left < second.right &&
+    first.right > second.left &&
+    first.top < second.bottom &&
+    first.bottom > second.top
+  );
+}
+
+/**
+ * 타일 경계가 grid 외곽 안에 들어오는지 확인한다.
+ *
+ * @param bounds 확인할 타일 경계
+ * @param map grid 범위를 제공하는 맵 데이터
+ * @param gridOrigin 격자 시작 좌표
+ * @returns grid 외곽 안에 있는지 여부
+ */
+function isInsideGridBounds(
+  bounds: StageRect,
+  map: MapData,
+  gridOrigin: StagePosition,
+): boolean {
+  const gridRight = gridOrigin.x + map.cols * MAP_TILE_SIZE;
+  const gridBottom = gridOrigin.y + map.rows * MAP_TILE_SIZE;
+
+  return (
+    bounds.left >= gridOrigin.x &&
+    bounds.right <= gridRight &&
+    bounds.top >= gridOrigin.y &&
+    bounds.bottom <= gridBottom
+  );
+}
+
+/**
  * 지정한 엔티티가 드래그 가능한 아군인지 확인한다.
  *
  * @param tile 확인할 타일 정보
@@ -292,6 +392,331 @@ function snapStagePositionToGrid(
  */
 function isAllyTile(tile: RenderableMapTile): boolean {
   return tile.entity.type === "ally" || tile.characterTile.type === "ally";
+}
+
+/**
+ * 지정한 타일이 이동을 막는 장애물인지 확인한다.
+ *
+ * @param tile 확인할 타일 정보
+ * @returns enemy 또는 block 여부
+ */
+function isBlockingTile(tile: RenderableMapTile): boolean {
+  return (
+    tile.entity.type === "enemy" ||
+    tile.entity.type === "block" ||
+    tile.characterTile.type === "enemy" ||
+    tile.characterTile.type === "block"
+  );
+}
+
+/**
+ * 드래그 타일 중심이 grid와 장애물 기준으로 허용되는지 확인한다.
+ *
+ * @param center 확인할 타일 중심
+ * @param activeInstanceId 드래그 중인 엔티티 id
+ * @param renderableTiles 현재 맵에 렌더링 중인 타일 목록
+ * @param map grid 범위를 제공하는 맵 데이터
+ * @param gridOrigin 격자 시작 좌표
+ * @returns 이동 가능한 위치인지 여부
+ */
+function canPlaceDraggedTileCenter(
+  center: StagePosition,
+  activeInstanceId: string,
+  blockingBounds: readonly BlockingTileBounds[],
+  map: MapData,
+  gridOrigin: StagePosition,
+): boolean {
+  const bounds = calculateTileBounds(center, COLLISION_INSET);
+
+  if (!isInsideGridBounds(bounds, map, gridOrigin)) {
+    return false;
+  }
+
+  return !blockingBounds.some((blockingTileBounds) => {
+    if (blockingTileBounds.instanceId === activeInstanceId) {
+      return false;
+    }
+
+    return intersectsRect(bounds, blockingTileBounds.bounds);
+  });
+}
+
+/**
+ * 드래그 타일의 경계가 통과할 수 있는 위치로 제한한다.
+ *
+ * @param proposedCenter 포인터 기준으로 계산한 다음 타일 중심
+ * @param fallbackCenter 충돌 시 유지할 이전 타일 중심
+ * @param activeInstanceId 드래그 중인 엔티티 id
+ * @param blockingBounds 이동을 막는 타일의 충돌 영역 목록
+ * @param map grid 범위를 제공하는 맵 데이터
+ * @param gridOrigin 격자 시작 좌표
+ * @returns 허용된 타일 중심 좌표
+ */
+function constrainDraggedTileCenter(
+  proposedCenter: StagePosition,
+  fallbackCenter: StagePosition,
+  activeInstanceId: string,
+  blockingBounds: readonly BlockingTileBounds[],
+  map: MapData,
+  gridOrigin: StagePosition,
+): StagePosition {
+  const deltaX = proposedCenter.x - fallbackCenter.x;
+  const deltaY = proposedCenter.y - fallbackCenter.y;
+  const stepCount = Math.max(
+    1,
+    Math.ceil(Math.max(Math.abs(deltaX), Math.abs(deltaY)) / 16),
+  );
+  let lastAllowedCenter = fallbackCenter;
+
+  for (let step = 1; step <= stepCount; step += 1) {
+    const nextCenter = {
+      x: fallbackCenter.x + (deltaX * step) / stepCount,
+      y: fallbackCenter.y + (deltaY * step) / stepCount,
+    };
+
+    if (
+      !canPlaceDraggedTileCenter(
+        nextCenter,
+        activeInstanceId,
+        blockingBounds,
+        map,
+        gridOrigin,
+      )
+    ) {
+      return lastAllowedCenter;
+    }
+
+    lastAllowedCenter = nextCenter;
+  }
+
+  return lastAllowedCenter;
+}
+
+/**
+ * 한 축 이동을 먼저 적용해 장애물에 막힌 상태에서도 다른 축으로 미끄러지게 한다.
+ *
+ * @param proposedCenter 포인터 이동량으로 계산한 다음 타일 중심
+ * @param fallbackCenter 현재 타일 중심
+ * @param activeInstanceId 드래그 중인 엔티티 id
+ * @param blockingBounds 이동을 막는 타일의 충돌 영역 목록
+ * @param map grid 범위를 제공하는 맵 데이터
+ * @param gridOrigin 격자 시작 좌표
+ * @returns 허용된 타일 중심 좌표
+ */
+function constrainDraggedTileCenterWithSlide(
+  proposedCenter: StagePosition,
+  fallbackCenter: StagePosition,
+  activeInstanceId: string,
+  blockingBounds: readonly BlockingTileBounds[],
+  map: MapData,
+  gridOrigin: StagePosition,
+): StagePosition {
+  const directCenter = constrainDraggedTileCenter(
+    proposedCenter,
+    fallbackCenter,
+    activeInstanceId,
+    blockingBounds,
+    map,
+    gridOrigin,
+  );
+
+  if (directCenter.x === proposedCenter.x && directCenter.y === proposedCenter.y) {
+    return directCenter;
+  }
+
+  const xFirstCenter = constrainDraggedTileCenter(
+    {
+      x: proposedCenter.x,
+      y: fallbackCenter.y,
+    },
+    fallbackCenter,
+    activeInstanceId,
+    blockingBounds,
+    map,
+    gridOrigin,
+  );
+  const xThenYCenter = constrainDraggedTileCenter(
+    {
+      x: xFirstCenter.x,
+      y: proposedCenter.y,
+    },
+    xFirstCenter,
+    activeInstanceId,
+    blockingBounds,
+    map,
+    gridOrigin,
+  );
+  const yFirstCenter = constrainDraggedTileCenter(
+    {
+      x: fallbackCenter.x,
+      y: proposedCenter.y,
+    },
+    fallbackCenter,
+    activeInstanceId,
+    blockingBounds,
+    map,
+    gridOrigin,
+  );
+  const yThenXCenter = constrainDraggedTileCenter(
+    {
+      x: proposedCenter.x,
+      y: yFirstCenter.y,
+    },
+    yFirstCenter,
+    activeInstanceId,
+    blockingBounds,
+    map,
+    gridOrigin,
+  );
+  const xThenYDistance =
+    Math.abs(proposedCenter.x - xThenYCenter.x) +
+    Math.abs(proposedCenter.y - xThenYCenter.y);
+  const yThenXDistance =
+    Math.abs(proposedCenter.x - yThenXCenter.x) +
+    Math.abs(proposedCenter.y - yThenXCenter.y);
+
+  return xThenYDistance <= yThenXDistance ? xThenYCenter : yThenXCenter;
+}
+
+/**
+ * 현재 위치에서 목표 위치를 향해 한 프레임에 이동할 중심 좌표를 계산한다.
+ *
+ * @param currentCenter 현재 타일 중심
+ * @param targetCenter 포인터가 요구하는 목표 타일 중심
+ * @returns 이번 프레임에 시도할 타일 중심
+ */
+function calculateNextSyncedCenter(
+  currentCenter: StagePosition,
+  targetCenter: StagePosition,
+): StagePosition {
+  const deltaX = targetCenter.x - currentCenter.x;
+  const deltaY = targetCenter.y - currentCenter.y;
+  const distance = Math.hypot(deltaX, deltaY);
+
+  if (distance <= DRAG_SYNC_EPSILON) {
+    return targetCenter;
+  }
+
+  const stepDistance = Math.min(
+    distance,
+    Math.min(DRAG_SYNC_MAX_STEP, Math.max(DRAG_SYNC_EPSILON, distance * DRAG_SYNC_EASING)),
+  );
+  const stepRatio = stepDistance / distance;
+
+  return {
+    x: currentCenter.x + deltaX * stepRatio,
+    y: currentCenter.y + deltaY * stepRatio,
+  };
+}
+
+/**
+ * ease-out 보간값을 계산한다.
+ *
+ * @param progress 0에서 1 사이의 진행도
+ * @returns ease-out이 적용된 진행도
+ */
+function easeOutCubic(progress: number): number {
+  return 1 - (1 - progress) ** 3;
+}
+
+/**
+ * 렌더링 타일 목록에서 이동을 막는 충돌 영역만 추출한다.
+ *
+ * @param renderableTiles 현재 맵에 렌더링 중인 타일 목록
+ * @param gridOrigin 격자 시작 좌표
+ * @returns enemy/block 타일 충돌 영역 목록
+ */
+function createBlockingBounds(
+  renderableTiles: readonly RenderableMapTile[],
+  gridOrigin: StagePosition,
+): readonly BlockingTileBounds[] {
+  return renderableTiles.flatMap((tile) => {
+    if (!isBlockingTile(tile)) {
+      return [];
+    }
+
+    return [
+      {
+        bounds: calculateTileBounds(
+          calculateTileCenter(tile.entity, gridOrigin),
+          COLLISION_INSET,
+        ),
+        instanceId: tile.entity.instanceId,
+      },
+    ];
+  });
+}
+
+/**
+ * 엔티티의 현재 grid 위치를 조회한다.
+ *
+ * @param entity 조회할 엔티티
+ * @param entityPositions 런타임 위치 저장소
+ * @returns 저장된 위치 또는 엔티티 기본 위치
+ */
+function getEntityGridPosition(
+  entity: MapEntity,
+  entityPositions: ReadonlyMap<string, GridPosition>,
+): GridPosition {
+  return entityPositions.get(entity.instanceId) ?? entity;
+}
+
+/**
+ * 지정한 grid 위치를 점유한 다른 아군 타일을 찾는다.
+ *
+ * @param gridPosition 확인할 grid 위치
+ * @param activeInstanceId 드래그 중인 엔티티 id
+ * @param renderableTiles 현재 맵에 렌더링 중인 타일 목록
+ * @param entityPositions 런타임 위치 저장소
+ * @param swapAnimations swap animation 중인 타일 목록
+ * @returns 해당 grid를 점유한 아군 타일 또는 undefined
+ */
+function findAllyTileAtGridPosition(
+  gridPosition: GridPosition,
+  activeInstanceId: string,
+  renderableTiles: readonly RenderableMapTile[],
+  entityPositions: ReadonlyMap<string, GridPosition>,
+  swapAnimations: ReadonlyMap<string, SwapAnimationState>,
+): RenderableMapTile | undefined {
+  return renderableTiles.find((tile) => {
+    if (
+      tile.entity.instanceId === activeInstanceId ||
+      !isAllyTile(tile) ||
+      swapAnimations.has(tile.entity.instanceId)
+    ) {
+      return false;
+    }
+
+    const allyPosition = getEntityGridPosition(tile.entity, entityPositions);
+
+    return allyPosition.x === gridPosition.x && allyPosition.y === gridPosition.y;
+  });
+}
+
+/**
+ * 지정한 grid 위치가 다른 아군에게 점유되어 있는지 확인한다.
+ *
+ * @param gridPosition 확인할 grid 위치
+ * @param ignoredInstanceIds 점유 검사에서 제외할 엔티티 id 목록
+ * @param renderableTiles 현재 맵에 렌더링 중인 타일 목록
+ * @param entityPositions 런타임 위치 저장소
+ * @returns 다른 아군 점유 여부
+ */
+function isGridOccupiedByOtherAlly(
+  gridPosition: GridPosition,
+  ignoredInstanceIds: ReadonlySet<string>,
+  renderableTiles: readonly RenderableMapTile[],
+  entityPositions: ReadonlyMap<string, GridPosition>,
+): boolean {
+  return renderableTiles.some((tile) => {
+    if (!isAllyTile(tile) || ignoredInstanceIds.has(tile.entity.instanceId)) {
+      return false;
+    }
+
+    const tilePosition = getEntityGridPosition(tile.entity, entityPositions);
+
+    return tilePosition.x === gridPosition.x && tilePosition.y === gridPosition.y;
+  });
 }
 
 /**
@@ -336,6 +761,7 @@ function drawMapGrid(graphics: Graphics, map: MapData): void {
  * @returns Pixi 스프라이트 또는 null
  */
 function PixiMapTile(props: PixiMapTileProps): React.ReactElement | null {
+  const spriteRef = useRef<Sprite>(null);
   const croppedTexture = useMemo(() => {
     if (props.baseTexture === undefined) {
       return undefined;
@@ -352,6 +778,26 @@ function PixiMapTile(props: PixiMapTileProps): React.ReactElement | null {
     });
   }, [props.baseTexture, props.tile.characterTile]);
 
+  useEffect(() => {
+    if (spriteRef.current === null) {
+      return;
+    }
+
+    props.onSpriteMount({
+      instanceId: props.tile.entity.instanceId,
+      sprite: spriteRef.current,
+    });
+
+    return (): void => {
+      props.onSpriteUnmount(props.tile.entity.instanceId);
+    };
+  }, [
+    croppedTexture,
+    props.onSpriteMount,
+    props.onSpriteUnmount,
+    props.tile.entity.instanceId,
+  ]);
+
   if (croppedTexture === undefined) {
     return null;
   }
@@ -360,16 +806,6 @@ function PixiMapTile(props: PixiMapTileProps): React.ReactElement | null {
     (MAP_TILE_SIZE * TILE_RENDER_RATIO) /
     Math.max(props.tile.characterTile.tile_w, props.tile.characterTile.tile_h);
   const tileCenter = calculateTileCenter(props.tile.entity, props.gridOrigin);
-  const dragX =
-    props.activeDrag?.instanceId === props.tile.entity.instanceId
-      ? props.activeDrag.pointerX - props.activeDrag.offsetX
-      : undefined;
-  const dragY =
-    props.activeDrag?.instanceId === props.tile.entity.instanceId
-      ? props.activeDrag.pointerY - props.activeDrag.offsetY
-      : undefined;
-  const x = dragX ?? tileCenter.x;
-  const y = dragY ?? tileCenter.y;
 
   return (
     <pixiSprite
@@ -377,20 +813,20 @@ function PixiMapTile(props: PixiMapTileProps): React.ReactElement | null {
       cursor={props.isDraggable ? "grab" : undefined}
       eventMode={props.isDraggable ? "static" : "none"}
       onPointerDown={(event: FederatedPointerEvent) => {
-        if (props.isDraggable) {
+        if (props.isDraggable && spriteRef.current !== null) {
           props.onDragStart({
             event,
             instanceId: props.tile.entity.instanceId,
-            spriteX: x,
-            spriteY: y,
+            sprite: spriteRef.current,
           });
         }
       }}
+      ref={spriteRef}
       roundPixels
       scale={{ x: spriteScale, y: spriteScale }}
       texture={croppedTexture}
-      x={x}
-      y={y}
+      x={tileCenter.x}
+      y={tileCenter.y}
     />
   );
 }
@@ -421,7 +857,15 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
     () => new Rectangle(0, 0, VIRTUAL_STAGE_WIDTH, VIRTUAL_STAGE_HEIGHT),
     [],
   );
-  const [activeDrag, setActiveDrag] = useState<ActiveDragState | undefined>();
+  const blockingBounds = useMemo(
+    () => createBlockingBounds(renderableTiles, gridOrigin),
+    [gridOrigin, renderableTiles],
+  );
+  const activeDragRef = useRef<ActiveDragState | undefined>(undefined);
+  const dragAnimationFrameRef = useRef<number | undefined>(undefined);
+  const entityPositionsRef = useRef<Map<string, GridPosition>>(new Map());
+  const spriteRefsRef = useRef<Map<string, Sprite>>(new Map());
+  const swapAnimationsRef = useRef<Map<string, SwapAnimationState>>(new Map());
 
   useEffect(() => {
     let isActive = true;
@@ -447,61 +891,259 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
     };
   }, [textureUrls]);
 
+  useEffect(() => {
+    if (activeDragRef.current !== undefined) {
+      return;
+    }
+
+    entityPositionsRef.current = new Map(
+      props.entities.map((entity) => [
+        entity.instanceId,
+        {
+          x: entity.x,
+          y: entity.y,
+        },
+      ]),
+    );
+  }, [props.entities]);
+
   const drawGrid = useCallback(
     (graphics: Graphics): void => {
       drawMapGrid(graphics, props.map);
     },
     [props.map],
   );
+  const updateSwapAnimations = useCallback((): void => {
+    if (swapAnimationsRef.current.size === 0) {
+      return;
+    }
+
+    const now = performance.now();
+
+    swapAnimationsRef.current.forEach((animation, instanceId) => {
+      const progress = Math.min(
+        1,
+        (now - animation.startedAt) / SWAP_ANIMATION_DURATION_MS,
+      );
+      const easedProgress = easeOutCubic(progress);
+      const nextX =
+        animation.from.x + (animation.to.x - animation.from.x) * easedProgress;
+      const nextY =
+        animation.from.y + (animation.to.y - animation.from.y) * easedProgress;
+
+      animation.sprite.position.set(nextX, nextY);
+
+      if (progress >= 1) {
+        animation.sprite.position.set(animation.to.x, animation.to.y);
+        swapAnimationsRef.current.delete(instanceId);
+      }
+    });
+  }, []);
+  const runDragFrame = useCallback((): void => {
+    const currentDrag = activeDragRef.current;
+
+    if (currentDrag === undefined) {
+      updateSwapAnimations();
+      dragAnimationFrameRef.current =
+        swapAnimationsRef.current.size > 0
+          ? window.requestAnimationFrame(runDragFrame)
+          : undefined;
+      return;
+    }
+
+    updateSwapAnimations();
+
+    const currentCenter = {
+      x: currentDrag.sprite.x,
+      y: currentDrag.sprite.y,
+    };
+    const targetCenter = {
+      x: currentDrag.targetX,
+      y: currentDrag.targetY,
+    };
+    const proposedCenter = calculateNextSyncedCenter(currentCenter, targetCenter);
+    const constrainedCenter = constrainDraggedTileCenterWithSlide(
+      proposedCenter,
+      currentCenter,
+      currentDrag.instanceId,
+      blockingBounds,
+      props.map,
+      gridOrigin,
+    );
+    const previousDragGridPosition =
+      entityPositionsRef.current.get(currentDrag.instanceId) ??
+      snapStagePositionToGrid(currentCenter, props.map, gridOrigin);
+    const nextDragGridPosition = snapStagePositionToGrid(
+      constrainedCenter,
+      props.map,
+      gridOrigin,
+    );
+    const enteredDifferentGrid =
+      previousDragGridPosition.x !== nextDragGridPosition.x ||
+      previousDragGridPosition.y !== nextDragGridPosition.y;
+    const collidingAllyTile = enteredDifferentGrid
+      ? findAllyTileAtGridPosition(
+          nextDragGridPosition,
+          currentDrag.instanceId,
+          renderableTiles,
+          entityPositionsRef.current,
+          swapAnimationsRef.current,
+        )
+      : undefined;
+
+    if (collidingAllyTile !== undefined) {
+      const swapGridPosition = previousDragGridPosition;
+      const swapCenter = calculateTileCenter(swapGridPosition, gridOrigin);
+      const ignoredInstanceIds = new Set([
+        currentDrag.instanceId,
+        collidingAllyTile.entity.instanceId,
+      ]);
+      const canSwap =
+        canPlaceDraggedTileCenter(
+          swapCenter,
+          collidingAllyTile.entity.instanceId,
+          blockingBounds,
+          props.map,
+          gridOrigin,
+        ) &&
+        !isGridOccupiedByOtherAlly(
+          swapGridPosition,
+          ignoredInstanceIds,
+          renderableTiles,
+          entityPositionsRef.current,
+        );
+      const collidingSprite = spriteRefsRef.current.get(
+        collidingAllyTile.entity.instanceId,
+      );
+
+      if (canSwap && collidingSprite !== undefined) {
+        swapAnimationsRef.current.set(collidingAllyTile.entity.instanceId, {
+          from: {
+            x: collidingSprite.x,
+            y: collidingSprite.y,
+          },
+          instanceId: collidingAllyTile.entity.instanceId,
+          sprite: collidingSprite,
+          startedAt: performance.now(),
+          to: swapCenter,
+        });
+        entityPositionsRef.current.set(
+          collidingAllyTile.entity.instanceId,
+          swapGridPosition,
+        );
+      }
+    }
+
+    currentDrag.sprite.position.set(constrainedCenter.x, constrainedCenter.y);
+    entityPositionsRef.current.set(
+      currentDrag.instanceId,
+      snapStagePositionToGrid(constrainedCenter, props.map, gridOrigin),
+    );
+    const reachedTarget =
+      Math.hypot(
+        currentDrag.targetX - constrainedCenter.x,
+        currentDrag.targetY - constrainedCenter.y,
+      ) <= DRAG_SYNC_EPSILON;
+    const wasBlocked =
+      constrainedCenter.x === currentCenter.x &&
+      constrainedCenter.y === currentCenter.y &&
+      !reachedTarget;
+
+    if ((reachedTarget || wasBlocked) && swapAnimationsRef.current.size === 0) {
+      dragAnimationFrameRef.current = undefined;
+      return;
+    }
+
+    dragAnimationFrameRef.current = window.requestAnimationFrame(runDragFrame);
+  }, [blockingBounds, gridOrigin, props.map, renderableTiles, updateSwapAnimations]);
+  const ensureDragAnimation = useCallback((): void => {
+    if (dragAnimationFrameRef.current !== undefined) {
+      return;
+    }
+
+    dragAnimationFrameRef.current = window.requestAnimationFrame(runDragFrame);
+  }, [runDragFrame]);
+  const mountSprite = useCallback((input: SpriteMountInput): void => {
+    spriteRefsRef.current.set(input.instanceId, input.sprite);
+  }, []);
+  const unmountSprite = useCallback((instanceId: string): void => {
+    spriteRefsRef.current.delete(instanceId);
+    swapAnimationsRef.current.delete(instanceId);
+  }, []);
   const startDrag = useCallback((input: StartDragInput): void => {
     input.event.stopPropagation();
 
-    setActiveDrag({
+    activeDragRef.current = {
+      grabOffsetX: input.event.global.x - input.sprite.x,
+      grabOffsetY: input.event.global.y - input.sprite.y,
       instanceId: input.instanceId,
-      offsetX: input.event.global.x - input.spriteX,
-      offsetY: input.event.global.y - input.spriteY,
-      pointerX: input.event.global.x,
-      pointerY: input.event.global.y,
-    });
-  }, []);
+      sprite: input.sprite,
+      targetX: input.sprite.x,
+      targetY: input.sprite.y,
+    };
+    ensureDragAnimation();
+  }, [ensureDragAnimation]);
   const moveDrag = useCallback((event: FederatedPointerEvent): void => {
-    setActiveDrag((currentDrag) => {
-      if (currentDrag === undefined) {
-        return currentDrag;
-      }
+    const currentDrag = activeDragRef.current;
 
-      return {
-        ...currentDrag,
-        pointerX: event.global.x,
-        pointerY: event.global.y,
-      };
-    });
-  }, []);
+    if (currentDrag === undefined) {
+      return;
+    }
+
+    activeDragRef.current = {
+      ...currentDrag,
+      targetX: event.global.x - currentDrag.grabOffsetX,
+      targetY: event.global.y - currentDrag.grabOffsetY,
+    };
+    ensureDragAnimation();
+  }, [ensureDragAnimation]);
   const endDrag = useCallback(
     (event: FederatedPointerEvent): void => {
+      const activeDrag = activeDragRef.current;
+
       if (activeDrag === undefined) {
         return;
       }
 
       const snappedPosition = snapStagePositionToGrid(
         {
-          x: event.global.x - activeDrag.offsetX,
-          y: event.global.y - activeDrag.offsetY,
+          x: activeDrag.sprite.x,
+          y: activeDrag.sprite.y,
         },
         props.map,
         gridOrigin,
       );
+      const snappedCenter = calculateTileCenter(snappedPosition, gridOrigin);
 
-      props.onEntityMove({
-        instanceId: activeDrag.instanceId,
-        x: snappedPosition.x,
-        y: snappedPosition.y,
-      });
+      entityPositionsRef.current.set(activeDrag.instanceId, snappedPosition);
 
-      setActiveDrag(undefined);
+      props.onEntitiesMove(
+        Array.from(entityPositionsRef.current.entries()).map(
+          ([instanceId, position]) => ({
+            instanceId,
+            x: position.x,
+            y: position.y,
+          }),
+        ),
+      );
+
+      activeDrag.sprite.position.copyFrom(snappedCenter);
+      activeDragRef.current = undefined;
+      if (dragAnimationFrameRef.current !== undefined) {
+        window.cancelAnimationFrame(dragAnimationFrameRef.current);
+        dragAnimationFrameRef.current = undefined;
+      }
     },
-    [activeDrag, gridOrigin, props],
+    [gridOrigin, props],
   );
+
+  useEffect(() => {
+    return (): void => {
+      if (dragAnimationFrameRef.current !== undefined) {
+        window.cancelAnimationFrame(dragAnimationFrameRef.current);
+      }
+    };
+  }, []);
 
   return (
     <Application
@@ -523,12 +1165,13 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
         <pixiGraphics draw={drawGrid} />
         {renderableTiles.map((tile) => (
           <PixiMapTile
-            activeDrag={activeDrag}
             baseTexture={baseTextures.get(tile.imageUrl)}
             gridOrigin={gridOrigin}
             isDraggable={isAllyTile(tile)}
             key={tile.entity.instanceId}
             onDragStart={startDrag}
+            onSpriteMount={mountSprite}
+            onSpriteUnmount={unmountSprite}
             tile={tile}
           />
         ))}
@@ -548,17 +1191,23 @@ export function MapScene(props: MapSceneProps): React.ReactElement {
   const [entities, setEntities] = useState<readonly MapEntity[]>(() =>
     createInitialMapEntities(map),
   );
-  const moveEntity = useCallback((input: MoveMapEntityInput): void => {
+  const moveEntities = useCallback((inputs: readonly MoveMapEntityInput[]): void => {
+    const nextPositionById = new Map(
+      inputs.map((input) => [input.instanceId, input] as const),
+    );
+
     setEntities((currentEntities) =>
-      currentEntities.map((entity) =>
-        entity.instanceId === input.instanceId
+      currentEntities.map((entity) => {
+        const nextPosition = nextPositionById.get(entity.instanceId);
+
+        return nextPosition !== undefined
           ? {
               ...entity,
-              x: input.x,
-              y: input.y,
+              x: nextPosition.x,
+              y: nextPosition.y,
             }
-          : entity,
-      ),
+          : entity;
+      }),
     );
   }, []);
 
@@ -574,7 +1223,11 @@ export function MapScene(props: MapSceneProps): React.ReactElement {
       >
         Back
       </button>
-      <PixiMapLayer entities={entities} map={map} onEntityMove={moveEntity} />
+      <PixiMapLayer
+        entities={entities}
+        map={map}
+        onEntitiesMove={moveEntities}
+      />
     </VirtualStage>
   );
 }
