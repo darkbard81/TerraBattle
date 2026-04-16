@@ -1,0 +1,17 @@
+{
+  "map": {
+    "background": "assets/background/Background_001.webp",
+    "rows": 6,
+    "cols": 8,
+    "cells": [
+      { "x": 0, "y": 0, "type": "ally1", "id": "char_hero_001" },
+      { "x": 1, "y": 0, "type": "ally2", "id": "char_hero_002" },
+      { "x": 2, "y": 0, "type": "ally3", "id": "" },
+      { "x": 3, "y": 0, "type": "ally4", "id": "" },
+      { "x": 4, "y": 0, "type": "ally5", "id": "" },
+      { "x": 5, "y": 0, "type": "ally6", "id": "" },
+      { "x": 5, "y": 5, "type": "enemy", "id": "char_monster_001" },
+      { "x": 2, "y": 1, "type": "block", "id": "char_block_001" }
+    ]
+  }
+}

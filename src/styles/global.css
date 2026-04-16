@@ -26,7 +26,7 @@ button {
   font: inherit;
 }
 
-.title-screen {
+.virtual-stage-root {
   position: relative;
   width: 100%;
   height: 100%;
@@ -34,7 +34,7 @@ button {
   background: #000000;
 }
 
-.title-screen__stage {
+.virtual-stage {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -77,4 +77,39 @@ button {
   border-color: #ffffff;
   background: rgba(0, 0, 0, 0.58);
   outline: none;
+}
+
+.map-scene__back-button {
+  position: absolute;
+  left: 48px;
+  top: 48px;
+  min-width: 176px;
+  min-height: 64px;
+  border: 1px solid rgba(246, 241, 231, 0.72);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #f6f1e7;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  cursor: pointer;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  z-index: 2;
+}
+
+.map-scene__back-button:hover,
+.map-scene__back-button:focus-visible {
+  border-color: #ffffff;
+  background: rgba(0, 0, 0, 0.62);
+  outline: none;
+}
+
+.map-scene__pixi-layer {
+  position: absolute;
+  inset: 0;
+  width: 1200px;
+  height: 1920px;
+  pointer-events: auto;
+  display: block;
 }

@@ -2,6 +2,7 @@
   {
     "id": "char_hero_001",
     "name": "엘프",
+    "type": "ally",
     "description": "엘프",
     "image_path": "assets/characters/characters_001.webp",
     "tile_x": 383,
@@ -31,6 +32,7 @@
   {
     "id": "char_hero_002",
     "name": "캣폴크",
+    "type": "ally",
     "description": "고양이 수인",
     "image_path": "assets/characters/characters_002.webp",
     "tile_x": 383,
@@ -60,6 +62,7 @@
   {
     "id": "char_hero_003",
     "name": "라미아",
+    "type": "ally",
     "description": "뱀 수인",
     "image_path": "assets/characters/characters_003.webp",
     "tile_x": 392,
@@ -89,6 +92,7 @@
   {
     "id": "char_hero_004",
     "name": "센타우르스",
+    "type": "ally",
     "description": "말 수인",
     "image_path": "assets/characters/characters_004.webp",
     "tile_x": 392,
@@ -118,6 +122,7 @@
   {
     "id": "char_hero_005",
     "name": "드레고니안",
+    "type": "ally",
     "description": "용수인",
     "image_path": "assets/characters/characters_005.webp",
     "tile_x": 380,
@@ -146,6 +151,7 @@
   },  {
     "id": "char_monster_001",
     "name": "플로팅아이",
+    "type": "enemy",
     "description": "비행눈알",
     "image_path": "assets/characters/monster_001.webp",
     "tile_x": 247,
@@ -171,5 +177,64 @@
     "LUK": 50,
     "current_grown_type": "Balanced",
     "HP": 1000
+  },  {
+    "id": "char_block_001",
+    "name": "벽",
+    "type": "block",
+    "description": "벽",
+    "image_path": "assets/characters/Block_001.jpg",
+    "tile_x": 1372,
+    "tile_y": 1289,
+    "tile_w": 256,
+    "tile_h": 256,
+    "level": 1,
+    "exp": 0,
+    "skill_slots": {
+      "1": "skill_basic_attack",
+      "2": null,
+      "3": null,
+      "4": null
+    },
+    "STR": 50,
+    "VIT": 50,
+    "DEX": 50,
+    "AGI": 50,
+    "AVD": 50,
+    "INT": 50,
+    "MND": 50,
+    "RES": 50,
+    "LUK": 50,
+    "current_grown_type": "Balanced",
+    "HP": 1000
+ },  {
+    "id": "char_trap_001",
+    "name": "함정",
+    "type": "trap",
+    "description": "지나갈때마다 Damage",
+    "image_path": "assets/characters/Block_001.jpg",
+    "tile_x": 1372,
+    "tile_y": 988,
+    "tile_w": 256,
+    "tile_h": 256,
+    "level": 1,
+    "exp": 0,
+    "skill_slots": {
+      "1": "skill_basic_attack",
+      "2": null,
+      "3": null,
+      "4": null
+    },
+    "STR": 50,
+    "VIT": 50,
+    "DEX": 50,
+    "AGI": 50,
+    "AVD": 50,
+    "INT": 50,
+    "MND": 50,
+    "RES": 50,
+    "LUK": 50,
+    "current_grown_type": "Balanced",
+    "HP": 1000
   }
+
 ]
