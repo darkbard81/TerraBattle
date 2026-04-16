@@ -3,6 +3,7 @@
     "background": "assets/background/Background_001.webp",
     "rows": 6,
     "cols": 8,
+    "timer": 5,
     "cells": [
       { "x": 0, "y": 0, "type": "ally1", "id": "char_hero_001" },
       { "x": 1, "y": 0, "type": "ally2", "id": "char_hero_002" },

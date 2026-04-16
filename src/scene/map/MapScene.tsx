@@ -25,7 +25,7 @@ extend({
 });
 
 const MAP_TILE_SIZE = 128;
-const COLLISION_INSET = 6;
+const COLLISION_INSET = 32;
 const MAP_GRID_GAP = 0;
 const DRAG_SYNC_EASING = 0.28;
 const DRAG_SYNC_MAX_STEP = 36;
@@ -50,6 +50,7 @@ interface MapData {
   readonly background: string;
   readonly rows: number;
   readonly cols: number;
+  readonly timer: number;
   readonly cells: readonly MapCellData[];
 }
 
@@ -122,7 +123,9 @@ interface RenderableMapTile {
 interface PixiMapLayerProps {
   readonly entities: readonly MapEntity[];
   readonly map: MapData;
+  readonly dragTimeLimitSeconds: number;
   readonly onEntitiesMove: (inputs: readonly MoveMapEntityInput[]) => void;
+  readonly onDragTimerChange: (remainingSeconds: number) => void;
 }
 
 /**
@@ -172,6 +175,7 @@ interface ActiveDragState {
   readonly grabOffsetY: number;
   readonly instanceId: string;
   readonly sprite: Sprite;
+  readonly startedAt: number;
   readonly targetX: number;
   readonly targetY: number;
 }
@@ -863,6 +867,8 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
   );
   const activeDragRef = useRef<ActiveDragState | undefined>(undefined);
   const dragAnimationFrameRef = useRef<number | undefined>(undefined);
+  const dragTimerIntervalRef = useRef<number | undefined>(undefined);
+  const dragTimerTimeoutRef = useRef<number | undefined>(undefined);
   const entityPositionsRef = useRef<Map<string, GridPosition>>(new Map());
   const spriteRefsRef = useRef<Map<string, Sprite>>(new Map());
   const swapAnimationsRef = useRef<Map<string, SwapAnimationState>>(new Map());
@@ -1063,6 +1069,74 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
 
     dragAnimationFrameRef.current = window.requestAnimationFrame(runDragFrame);
   }, [runDragFrame]);
+  const clearDragTimer = useCallback((): void => {
+    if (dragTimerIntervalRef.current !== undefined) {
+      window.clearInterval(dragTimerIntervalRef.current);
+      dragTimerIntervalRef.current = undefined;
+    }
+
+    if (dragTimerTimeoutRef.current !== undefined) {
+      window.clearTimeout(dragTimerTimeoutRef.current);
+      dragTimerTimeoutRef.current = undefined;
+    }
+  }, []);
+  const updateDragTimerDisplay = useCallback((): void => {
+    const activeDrag = activeDragRef.current;
+
+    if (activeDrag === undefined) {
+      props.onDragTimerChange(props.dragTimeLimitSeconds);
+      return;
+    }
+
+    const elapsedSeconds = (performance.now() - activeDrag.startedAt) / 1000;
+    const remainingSeconds = Math.max(
+      0,
+      props.dragTimeLimitSeconds - elapsedSeconds,
+    );
+
+    props.onDragTimerChange(remainingSeconds);
+  }, [props]);
+  const completeActiveDrag = useCallback((): void => {
+    const activeDrag = activeDragRef.current;
+
+    if (activeDrag === undefined) {
+      clearDragTimer();
+      props.onDragTimerChange(props.dragTimeLimitSeconds);
+      return;
+    }
+
+    const snappedPosition = snapStagePositionToGrid(
+      {
+        x: activeDrag.sprite.x,
+        y: activeDrag.sprite.y,
+      },
+      props.map,
+      gridOrigin,
+    );
+    const snappedCenter = calculateTileCenter(snappedPosition, gridOrigin);
+
+    clearDragTimer();
+    entityPositionsRef.current.set(activeDrag.instanceId, snappedPosition);
+
+    props.onEntitiesMove(
+      Array.from(entityPositionsRef.current.entries()).map(
+        ([instanceId, position]) => ({
+          instanceId,
+          x: position.x,
+          y: position.y,
+        }),
+      ),
+    );
+
+    activeDrag.sprite.position.copyFrom(snappedCenter);
+    activeDragRef.current = undefined;
+    props.onDragTimerChange(props.dragTimeLimitSeconds);
+
+    if (dragAnimationFrameRef.current !== undefined) {
+      window.cancelAnimationFrame(dragAnimationFrameRef.current);
+      dragAnimationFrameRef.current = undefined;
+    }
+  }, [clearDragTimer, gridOrigin, props]);
   const mountSprite = useCallback((input: SpriteMountInput): void => {
     spriteRefsRef.current.set(input.instanceId, input.sprite);
   }, []);
@@ -1073,16 +1147,32 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
   const startDrag = useCallback((input: StartDragInput): void => {
     input.event.stopPropagation();
 
+    const startedAt = performance.now();
+
+    clearDragTimer();
     activeDragRef.current = {
       grabOffsetX: input.event.global.x - input.sprite.x,
       grabOffsetY: input.event.global.y - input.sprite.y,
       instanceId: input.instanceId,
       sprite: input.sprite,
+      startedAt,
       targetX: input.sprite.x,
       targetY: input.sprite.y,
     };
+    props.onDragTimerChange(props.dragTimeLimitSeconds);
+    dragTimerIntervalRef.current = window.setInterval(updateDragTimerDisplay, 100);
+    dragTimerTimeoutRef.current = window.setTimeout(() => {
+      props.onDragTimerChange(0);
+      completeActiveDrag();
+    }, props.dragTimeLimitSeconds * 1000);
     ensureDragAnimation();
-  }, [ensureDragAnimation]);
+  }, [
+    clearDragTimer,
+    completeActiveDrag,
+    ensureDragAnimation,
+    props,
+    updateDragTimerDisplay,
+  ]);
   const moveDrag = useCallback((event: FederatedPointerEvent): void => {
     const currentDrag = activeDragRef.current;
 
@@ -1099,42 +1189,10 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
   }, [ensureDragAnimation]);
   const endDrag = useCallback(
     (event: FederatedPointerEvent): void => {
-      const activeDrag = activeDragRef.current;
-
-      if (activeDrag === undefined) {
-        return;
-      }
-
-      const snappedPosition = snapStagePositionToGrid(
-        {
-          x: activeDrag.sprite.x,
-          y: activeDrag.sprite.y,
-        },
-        props.map,
-        gridOrigin,
-      );
-      const snappedCenter = calculateTileCenter(snappedPosition, gridOrigin);
-
-      entityPositionsRef.current.set(activeDrag.instanceId, snappedPosition);
-
-      props.onEntitiesMove(
-        Array.from(entityPositionsRef.current.entries()).map(
-          ([instanceId, position]) => ({
-            instanceId,
-            x: position.x,
-            y: position.y,
-          }),
-        ),
-      );
-
-      activeDrag.sprite.position.copyFrom(snappedCenter);
-      activeDragRef.current = undefined;
-      if (dragAnimationFrameRef.current !== undefined) {
-        window.cancelAnimationFrame(dragAnimationFrameRef.current);
-        dragAnimationFrameRef.current = undefined;
-      }
+      event.stopPropagation();
+      completeActiveDrag();
     },
-    [gridOrigin, props],
+    [completeActiveDrag],
   );
 
   useEffect(() => {
@@ -1142,8 +1200,10 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
       if (dragAnimationFrameRef.current !== undefined) {
         window.cancelAnimationFrame(dragAnimationFrameRef.current);
       }
+
+      clearDragTimer();
     };
-  }, []);
+  }, [clearDragTimer]);
 
   return (
     <Application
@@ -1191,6 +1251,7 @@ export function MapScene(props: MapSceneProps): React.ReactElement {
   const [entities, setEntities] = useState<readonly MapEntity[]>(() =>
     createInitialMapEntities(map),
   );
+  const [remainingDragSeconds, setRemainingDragSeconds] = useState(map.timer);
   const moveEntities = useCallback((inputs: readonly MoveMapEntityInput[]): void => {
     const nextPositionById = new Map(
       inputs.map((input) => [input.instanceId, input] as const),
@@ -1223,9 +1284,17 @@ export function MapScene(props: MapSceneProps): React.ReactElement {
       >
         Back
       </button>
+      <div className="map-scene__timer-hud" aria-live="polite">
+        <span className="map-scene__timer-label">Time</span>
+        <span className="map-scene__timer-value">
+          {remainingDragSeconds.toFixed(1)}
+        </span>
+      </div>
       <PixiMapLayer
+        dragTimeLimitSeconds={map.timer}
         entities={entities}
         map={map}
+        onDragTimerChange={setRemainingDragSeconds}
         onEntitiesMove={moveEntities}
       />
     </VirtualStage>

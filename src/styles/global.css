@@ -105,6 +105,42 @@ button {
   outline: none;
 }
 
+.map-scene__timer-hud {
+  position: absolute;
+  left: 48px;
+  top: 128px;
+  min-width: 176px;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border: 1px solid rgba(246, 241, 231, 0.62);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.48);
+  color: #f6f1e7;
+  padding: 0 20px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  z-index: 2;
+}
+
+.map-scene__timer-label {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.map-scene__timer-value {
+  min-width: 56px;
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+  text-align: right;
+}
+
 .map-scene__pixi-layer {
   position: absolute;
   inset: 0;
