@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  font-family: "Segoe UI", sans-serif;
+  font-family: "Segoe UI", Arial, sans-serif;
   background: #000000;
   color: #f6f1e7;
 }
@@ -13,199 +13,68 @@ html,
 body,
 #app {
   width: 100%;
-  min-height: 100%;
+  height: 100%;
   margin: 0;
 }
 
 body {
-  min-height: 100vh;
   overflow: hidden;
   background: #000000;
-}
-
-#app {
-  position: relative;
 }
 
 button {
   font: inherit;
 }
 
-.game-shell {
+.title-screen {
   position: relative;
   width: 100%;
-  min-height: 100vh;
+  height: 100%;
   overflow: hidden;
   background: #000000;
 }
 
-.game-shell__canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.game-shell__hud-layer,
-.title-scene__hud {
+.title-screen__stage {
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 50%;
+  width: 1200px;
+  height: 1920px;
+  transform-origin: center;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 1200px 1920px;
 }
 
-.game-shell__hud-layer {
-  pointer-events: none;
-}
-
-.title-scene__hud {
-  display: grid;
-  align-content: end;
-  justify-items: center;
-  gap: 24px;
-  padding: 48px 24px 72px;
-  pointer-events: none;
-}
-
-.title-scene__title {
-  margin: 0;
-  font-size: clamp(2.5rem, 4vw, 4.5rem);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
-}
-
-.title-scene__menu {
-  display: grid;
-  gap: 12px;
-  width: min(360px, 100%);
-  pointer-events: auto;
-}
-
-.title-scene__button {
-  width: 100%;
-  padding: 16px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 12px;
-  background: rgba(8, 10, 14, 0.72);
-  color: inherit;
-  font-size: 1rem;
-  cursor: pointer;
-}
-
-.title-scene__button:hover,
-.title-scene__button:focus-visible {
-  border-color: rgba(255, 255, 255, 0.34);
-  outline: none;
-}
-
-.tool-mvp {
-  min-height: 100vh;
-  padding: 16px;
-  display: grid;
-  gap: 12px;
-  background: #10131a;
-  overflow: auto;
-}
-
-.tool-mvp__header,
-.tool-mvp__panel {
-  background: #171b23;
-  border: 1px solid #2a3140;
-  border-radius: 10px;
-  padding: 12px;
-}
-
-.tool-mvp__header-actions {
+.title-screen__menu {
+  position: absolute;
+  left: 50%;
+  top: 70%;
+  width: 360px;
+  transform: translate(-50%, -50%);
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+  justify-content: center;
 }
 
-.tool-mvp__columns {
-  display: grid;
-  grid-template-columns: 240px 1fr 1fr;
-  gap: 12px;
-}
-
-.tool-mvp__panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.tool-mvp__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.tool-mvp__list button {
+.title-screen__button {
   width: 100%;
-  text-align: left;
-  background: #0f141e;
-  border: 1px solid #30384a;
-  color: #f6f1e7;
+  min-height: 72px;
+  border: 1px solid rgba(246, 241, 231, 0.65);
   border-radius: 8px;
-  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.46);
+  color: #f6f1e7;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  text-align: center;
+  cursor: pointer;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
 }
 
-.tool-mvp__list button.is-selected {
-  border-color: #78a7ff;
-}
-
-.tool-mvp__form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.tool-mvp__form-grid label {
-  display: grid;
-  gap: 4px;
-  font-size: 0.85rem;
-}
-
-.tool-mvp__field-full {
-  grid-column: 1 / -1;
-}
-
-.tool-mvp input,
-.tool-mvp textarea,
-.tool-mvp select,
-.tool-mvp button {
-  background: #0f141e;
-  border: 1px solid #30384a;
-  color: inherit;
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-
-.tool-mvp__preview-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.tool-mvp__issues ul {
-  margin: 0;
-  padding-left: 20px;
-}
-
-.tool-mvp__issues .severity-error {
-  color: #ff8383;
-}
-
-.tool-mvp__issues .severity-warning {
-  color: #ffd279;
-}
-
-@media (max-width: 1200px) {
-  .tool-mvp__columns {
-    grid-template-columns: 1fr;
-  }
-
-  .tool-mvp__preview-grid {
-    grid-template-columns: 1fr;
-  }
+.title-screen__button:hover,
+.title-screen__button:focus-visible {
+  border-color: #ffffff;
+  background: rgba(0, 0, 0, 0.58);
+  outline: none;
 }

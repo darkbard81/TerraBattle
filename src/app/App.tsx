@@ -1,21 +1,11 @@
-import React, { useReducer } from "react";
-import { GameShell } from "./GameShell.js";
-import {
-  createInitialGameState,
-  gameStateReducer,
-} from "../game/state/GameStateReducer.js";
+import React from "react";
+import { TitleScreen } from "../scene/title/TitleScreen.js";
 
 /**
  * 애플리케이션의 최상위 루트다.
  *
- * @returns 전역 게임 상태를 소유한 앱 루트
+ * @returns 현재 표시할 게임 화면
  */
 export function App(): React.ReactElement {
-  const [gameState, dispatch] = useReducer(
-    gameStateReducer,
-    undefined,
-    createInitialGameState,
-  );
-
-  return <GameShell gameState={gameState} dispatch={dispatch} />;
+  return <TitleScreen />;
 }

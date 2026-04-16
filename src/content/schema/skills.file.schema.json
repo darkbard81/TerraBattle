@@ -1,8 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "terrabattle://schema/skills.file.schema.json",
-  "type": "array",
-  "items": {
-    "$ref": "terrabattle://schema/skill.schema.json"
-  }
-}
