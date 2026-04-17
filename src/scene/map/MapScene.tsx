@@ -280,8 +280,9 @@ type CollisionDirection =
  * 충돌 영역 진입 방향 계산 입력값이다.
  */
 interface ResolveCollisionDirectionInput {
-  readonly bounds: StageRect;
-  readonly stagePosition: StagePosition;
+  readonly draggedBounds: StageRect;
+  readonly intersectionBounds: StageRect;
+  readonly targetBounds: StageRect;
 }
 
 /**
@@ -298,6 +299,17 @@ interface CollisionDirectionResolution {
 interface BlockingTileBounds {
   readonly instanceId: string;
   readonly bounds: StageRect;
+}
+
+/**
+ * 아군 타일과 드래그 타일의 충돌 정보다.
+ */
+interface AllyTileCollision {
+  readonly bounds: StageRect;
+  readonly gridPosition: GridPosition;
+  readonly intersectionArea: number;
+  readonly intersectionBounds: StageRect;
+  readonly tile: RenderableMapTile;
 }
 
 /**
@@ -435,6 +447,39 @@ function calculateTileBounds(center: StagePosition, inset: number): StageRect {
 }
 
 /**
+ * 두 사각형이 겹친 영역을 계산한다.
+ *
+ * @param first 첫 번째 사각형
+ * @param second 두 번째 사각형
+ * @returns 겹친 영역 또는 겹치지 않으면 undefined
+ */
+function calculateRectIntersection(
+  first: StageRect,
+  second: StageRect,
+): StageRect | undefined {
+  const intersection = {
+    bottom: Math.min(first.bottom, second.bottom),
+    left: Math.max(first.left, second.left),
+    right: Math.min(first.right, second.right),
+    top: Math.max(first.top, second.top),
+  };
+
+  return intersection.left < intersection.right && intersection.top < intersection.bottom
+    ? intersection
+    : undefined;
+}
+
+/**
+ * 사각형 면적을 계산한다.
+ *
+ * @param rect 면적을 계산할 사각형
+ * @returns 사각형 면적
+ */
+function calculateRectArea(rect: StageRect): number {
+  return (rect.right - rect.left) * (rect.bottom - rect.top);
+}
+
+/**
  * 충돌 방향 offset에 대응하는 방향 이름을 계산한다.
  *
  * @param gridOffset 충돌 영역 기준의 grid 방향 offset
@@ -461,40 +506,46 @@ function resolveCollisionDirectionName(gridOffset: GridPosition): CollisionDirec
 }
 
 /**
- * 대상 타일의 충돌 사각형을 기준으로 드래그 타일이 진입한 8방향을 계산한다.
+ * 대상 타일과 드래그 타일의 충돌 경계를 기준으로 진입한 8방향을 계산한다.
  *
- * @param input 충돌 영역과 드래그 타일 중심 좌표
+ * @param input 대상 경계, 드래그 경계, 두 경계의 교차 영역
  * @returns 진입 방향과 그 방향의 grid offset
  */
 function resolveCollisionDirection(
   input: ResolveCollisionDirectionInput,
 ): CollisionDirectionResolution {
-  const width = input.bounds.right - input.bounds.left;
-  const height = input.bounds.bottom - input.bounds.top;
-  const leftBandEnd = input.bounds.left + width / 3;
-  const rightBandStart = input.bounds.right - width / 3;
-  const topBandEnd = input.bounds.top + height / 3;
-  const bottomBandStart = input.bounds.bottom - height / 3;
+  const width = input.targetBounds.right - input.targetBounds.left;
+  const height = input.targetBounds.bottom - input.targetBounds.top;
+  const leftBandEnd = input.targetBounds.left + width / 3;
+  const rightBandStart = input.targetBounds.right - width / 3;
+  const topBandEnd = input.targetBounds.top + height / 3;
+  const bottomBandStart = input.targetBounds.bottom - height / 3;
+  const collisionCenterX =
+    (input.intersectionBounds.left + input.intersectionBounds.right) / 2;
+  const collisionCenterY =
+    (input.intersectionBounds.top + input.intersectionBounds.bottom) / 2;
   let offsetX = 0;
   let offsetY = 0;
 
-  if (input.stagePosition.x < leftBandEnd) {
+  if (collisionCenterX < leftBandEnd) {
     offsetX = -1;
-  } else if (input.stagePosition.x > rightBandStart) {
+  } else if (collisionCenterX > rightBandStart) {
     offsetX = 1;
   }
 
-  if (input.stagePosition.y < topBandEnd) {
+  if (collisionCenterY < topBandEnd) {
     offsetY = -1;
-  } else if (input.stagePosition.y > bottomBandStart) {
+  } else if (collisionCenterY > bottomBandStart) {
     offsetY = 1;
   }
 
   if (offsetX === 0 && offsetY === 0) {
-    const centerX = (input.bounds.left + input.bounds.right) / 2;
-    const centerY = (input.bounds.top + input.bounds.bottom) / 2;
-    const deltaX = input.stagePosition.x - centerX;
-    const deltaY = input.stagePosition.y - centerY;
+    const draggedCenterX = (input.draggedBounds.left + input.draggedBounds.right) / 2;
+    const draggedCenterY = (input.draggedBounds.top + input.draggedBounds.bottom) / 2;
+    const targetCenterX = (input.targetBounds.left + input.targetBounds.right) / 2;
+    const targetCenterY = (input.targetBounds.top + input.targetBounds.bottom) / 2;
+    const deltaX = draggedCenterX - targetCenterX;
+    const deltaY = draggedCenterY - targetCenterY;
 
     if (Math.abs(deltaX) >= Math.abs(deltaY)) {
       offsetX = deltaX >= 0 ? 1 : -1;
@@ -865,35 +916,63 @@ function getEntityGridPosition(
 }
 
 /**
- * 지정한 grid 위치를 점유한 다른 아군 타일을 찾는다.
+ * 드래그 타일 경계와 가장 크게 겹친 아군 타일을 찾는다.
  *
- * @param gridPosition 확인할 grid 위치
+ * @param draggedBounds 드래그 타일의 충돌 경계
  * @param activeInstanceId 드래그 중인 엔티티 id
  * @param renderableTiles 현재 맵에 렌더링 중인 타일 목록
  * @param entityPositions 런타임 위치 저장소
  * @param swapAnimations swap animation 중인 타일 목록
- * @returns 해당 grid를 점유한 아군 타일 또는 undefined
+ * @param gridOrigin 격자 시작 좌표
+ * @returns 충돌한 아군 타일 정보 또는 undefined
  */
-function findAllyTileAtGridPosition(
-  gridPosition: GridPosition,
+function findCollidingAllyTile(
+  draggedBounds: StageRect,
   activeInstanceId: string,
   renderableTiles: readonly RenderableMapTile[],
   entityPositions: ReadonlyMap<string, GridPosition>,
   swapAnimations: ReadonlyMap<string, SwapAnimationState>,
-): RenderableMapTile | undefined {
-  return renderableTiles.find((tile) => {
+  gridOrigin: StagePosition,
+): AllyTileCollision | undefined {
+  let bestCollision: AllyTileCollision | undefined;
+
+  renderableTiles.forEach((tile) => {
     if (
       tile.entity.instanceId === activeInstanceId ||
       !isAllyTile(tile) ||
       swapAnimations.has(tile.entity.instanceId)
     ) {
-      return false;
+      return;
     }
 
-    const allyPosition = getEntityGridPosition(tile.entity, entityPositions);
+    const gridPosition = getEntityGridPosition(tile.entity, entityPositions);
+    const bounds = calculateTileBounds(
+      calculateTileCenter(gridPosition, gridOrigin),
+      COLLISION_INSET,
+    );
+    const intersectionBounds = calculateRectIntersection(draggedBounds, bounds);
 
-    return allyPosition.x === gridPosition.x && allyPosition.y === gridPosition.y;
+    if (intersectionBounds === undefined) {
+      return;
+    }
+
+    const intersectionArea = calculateRectArea(intersectionBounds);
+
+    if (
+      bestCollision === undefined ||
+      intersectionArea > bestCollision.intersectionArea
+    ) {
+      bestCollision = {
+        bounds,
+        gridPosition,
+        intersectionArea,
+        intersectionBounds,
+        tile,
+      };
+    }
   });
+
+  return bestCollision;
 }
 
 /**
@@ -1184,38 +1263,35 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
       props.map,
       gridOrigin,
     );
-    const enteredDifferentGrid =
-      previousDragGridPosition.x !== nextDragGridPosition.x ||
-      previousDragGridPosition.y !== nextDragGridPosition.y;
-    const collidingAllyTile = enteredDifferentGrid
-      ? findAllyTileAtGridPosition(
-          nextDragGridPosition,
-          currentDrag.instanceId,
-          renderableTiles,
-          entityPositionsRef.current,
-          swapAnimationsRef.current,
-        )
-      : undefined;
+    const draggedBounds = calculateTileBounds(constrainedCenter, COLLISION_INSET);
+    const collidingAllyTile = findCollidingAllyTile(
+      draggedBounds,
+      currentDrag.instanceId,
+      renderableTiles,
+      entityPositionsRef.current,
+      swapAnimationsRef.current,
+      gridOrigin,
+    );
 
     if (collidingAllyTile !== undefined) {
-      const targetCenter = calculateTileCenter(nextDragGridPosition, gridOrigin);
       const collisionDirection = resolveCollisionDirection({
-        bounds: calculateTileBounds(targetCenter, COLLISION_INSET),
-        stagePosition: constrainedCenter,
+        draggedBounds,
+        intersectionBounds: collidingAllyTile.intersectionBounds,
+        targetBounds: collidingAllyTile.bounds,
       });
       const swapGridPosition = {
-        x: nextDragGridPosition.x + collisionDirection.gridOffset.x,
-        y: nextDragGridPosition.y + collisionDirection.gridOffset.y,
+        x: collidingAllyTile.gridPosition.x + collisionDirection.gridOffset.x,
+        y: collidingAllyTile.gridPosition.y + collisionDirection.gridOffset.y,
       };
       const swapCenter = calculateTileCenter(swapGridPosition, gridOrigin);
       const ignoredInstanceIds = new Set([
         currentDrag.instanceId,
-        collidingAllyTile.entity.instanceId,
+        collidingAllyTile.tile.entity.instanceId,
       ]);
       const canSwap =
         canPlaceDraggedTileCenter(
           swapCenter,
-          collidingAllyTile.entity.instanceId,
+          collidingAllyTile.tile.entity.instanceId,
           blockingBounds,
           props.map,
           gridOrigin,
@@ -1227,12 +1303,13 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
           entityPositionsRef.current,
         );
       const collidingSprite = spriteRefsRef.current.get(
-        collidingAllyTile.entity.instanceId,
+        collidingAllyTile.tile.entity.instanceId,
       );
 
       if (canSwap && collidingSprite !== undefined) {
         console.debug("[MapScene] swap decided", {
           collisionDirection: collisionDirection.direction,
+          collisionGridPosition: collidingAllyTile.gridPosition,
           nextDragGridPosition,
           previousDragGridPosition,
           swapGridPosition,
@@ -1240,18 +1317,18 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
           y: constrainedCenter.y,
         });
 
-        swapAnimationsRef.current.set(collidingAllyTile.entity.instanceId, {
+        swapAnimationsRef.current.set(collidingAllyTile.tile.entity.instanceId, {
           from: {
             x: collidingSprite.x,
             y: collidingSprite.y,
           },
-          instanceId: collidingAllyTile.entity.instanceId,
+          instanceId: collidingAllyTile.tile.entity.instanceId,
           sprite: collidingSprite,
           startedAt: performance.now(),
           to: swapCenter,
         });
         entityPositionsRef.current.set(
-          collidingAllyTile.entity.instanceId,
+          collidingAllyTile.tile.entity.instanceId,
           swapGridPosition,
         );
       }
