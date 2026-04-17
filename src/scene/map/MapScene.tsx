@@ -41,7 +41,7 @@ extend({
   Sprite,
 });
 
-const MAP_TILE_SIZE = 128;
+const MAP_TILE_SIZE = 184;
 const COLLISION_INSET = 32;
 const MAP_GRID_GAP = 0;
 const DRAG_SYNC_EASING = 0.28;
@@ -49,6 +49,8 @@ const DRAG_SYNC_MAX_STEP = 36;
 const DRAG_SYNC_EPSILON = 0.5;
 const SWAP_ANIMATION_DURATION_MS = 120;
 const TILE_RENDER_RATIO = 1;
+const TILE_BASE_Z_INDEX = 1;
+const DRAGGED_TILE_Z_INDEX = 10_000;
 const DAMAGE_TEXT_DURATION_CSS_VARIABLE = "--map-scene-damage-text-duration";
 const DAMAGE_TEXT_STAGGER_CSS_VARIABLE = "--map-scene-damage-text-stagger";
 const SANDWICH_ATTACK_DURATION_CSS_VARIABLE =
@@ -189,6 +191,7 @@ interface PixiMapTileProps {
   readonly baseTexture: Texture | undefined;
   readonly gridOrigin: { readonly x: number; readonly y: number };
   readonly isDraggable: boolean;
+  readonly zIndex: number;
   readonly onDragStart: (input: StartDragInput) => void;
   readonly onSpriteMount: (input: SpriteMountInput) => void;
   readonly onSpriteUnmount: (instanceId: string) => void;
@@ -227,6 +230,7 @@ interface ActiveDragState {
   readonly grabOffsetX: number;
   readonly grabOffsetY: number;
   readonly instanceId: string;
+  readonly previousZIndex: number;
   readonly sprite: Sprite;
   readonly startedAt: number;
   readonly targetX: number;
@@ -257,6 +261,35 @@ interface StageRect {
   readonly top: number;
   readonly right: number;
   readonly bottom: number;
+}
+
+/**
+ * 대상 타일 충돌 영역에 진입한 8방향이다.
+ */
+type CollisionDirection =
+  | "north"
+  | "northEast"
+  | "east"
+  | "southEast"
+  | "south"
+  | "southWest"
+  | "west"
+  | "northWest";
+
+/**
+ * 충돌 영역 진입 방향 계산 입력값이다.
+ */
+interface ResolveCollisionDirectionInput {
+  readonly bounds: StageRect;
+  readonly stagePosition: StagePosition;
+}
+
+/**
+ * 충돌 영역 진입 방향 계산 결과다.
+ */
+interface CollisionDirectionResolution {
+  readonly direction: CollisionDirection;
+  readonly gridOffset: GridPosition;
 }
 
 /**
@@ -340,7 +373,7 @@ function calculateGridOrigin(map: MapData): { readonly x: number; readonly y: nu
 
   return {
     x: (VIRTUAL_STAGE_WIDTH - gridWidth) / 2,
-    y: (VIRTUAL_STAGE_HEIGHT - gridHeight) / 2,
+    y: (VIRTUAL_STAGE_HEIGHT - gridHeight) / 1.2,
   };
 }
 
@@ -398,6 +431,86 @@ function calculateTileBounds(center: StagePosition, inset: number): StageRect {
     left: center.x - halfTileSize + inset,
     right: center.x + halfTileSize - inset,
     top: center.y - halfTileSize + inset,
+  };
+}
+
+/**
+ * 충돌 방향 offset에 대응하는 방향 이름을 계산한다.
+ *
+ * @param gridOffset 충돌 영역 기준의 grid 방향 offset
+ * @returns 8방향 이름
+ */
+function resolveCollisionDirectionName(gridOffset: GridPosition): CollisionDirection {
+  if (gridOffset.y < 0) {
+    if (gridOffset.x < 0) {
+      return "northWest";
+    }
+
+    return gridOffset.x > 0 ? "northEast" : "north";
+  }
+
+  if (gridOffset.y > 0) {
+    if (gridOffset.x < 0) {
+      return "southWest";
+    }
+
+    return gridOffset.x > 0 ? "southEast" : "south";
+  }
+
+  return gridOffset.x < 0 ? "west" : "east";
+}
+
+/**
+ * 대상 타일의 충돌 사각형을 기준으로 드래그 타일이 진입한 8방향을 계산한다.
+ *
+ * @param input 충돌 영역과 드래그 타일 중심 좌표
+ * @returns 진입 방향과 그 방향의 grid offset
+ */
+function resolveCollisionDirection(
+  input: ResolveCollisionDirectionInput,
+): CollisionDirectionResolution {
+  const width = input.bounds.right - input.bounds.left;
+  const height = input.bounds.bottom - input.bounds.top;
+  const leftBandEnd = input.bounds.left + width / 3;
+  const rightBandStart = input.bounds.right - width / 3;
+  const topBandEnd = input.bounds.top + height / 3;
+  const bottomBandStart = input.bounds.bottom - height / 3;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (input.stagePosition.x < leftBandEnd) {
+    offsetX = -1;
+  } else if (input.stagePosition.x > rightBandStart) {
+    offsetX = 1;
+  }
+
+  if (input.stagePosition.y < topBandEnd) {
+    offsetY = -1;
+  } else if (input.stagePosition.y > bottomBandStart) {
+    offsetY = 1;
+  }
+
+  if (offsetX === 0 && offsetY === 0) {
+    const centerX = (input.bounds.left + input.bounds.right) / 2;
+    const centerY = (input.bounds.top + input.bounds.bottom) / 2;
+    const deltaX = input.stagePosition.x - centerX;
+    const deltaY = input.stagePosition.y - centerY;
+
+    if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+      offsetX = deltaX >= 0 ? 1 : -1;
+    } else {
+      offsetY = deltaY >= 0 ? 1 : -1;
+    }
+  }
+
+  const gridOffset = {
+    x: offsetX,
+    y: offsetY,
+  };
+
+  return {
+    direction: resolveCollisionDirectionName(gridOffset),
+    gridOffset,
   };
 }
 
@@ -917,6 +1030,7 @@ function PixiMapTile(props: PixiMapTileProps): React.ReactElement | null {
       texture={croppedTexture}
       x={tileCenter.x}
       y={tileCenter.y}
+      zIndex={props.zIndex}
     />
   );
 }
@@ -1084,7 +1198,15 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
       : undefined;
 
     if (collidingAllyTile !== undefined) {
-      const swapGridPosition = previousDragGridPosition;
+      const targetCenter = calculateTileCenter(nextDragGridPosition, gridOrigin);
+      const collisionDirection = resolveCollisionDirection({
+        bounds: calculateTileBounds(targetCenter, COLLISION_INSET),
+        stagePosition: constrainedCenter,
+      });
+      const swapGridPosition = {
+        x: nextDragGridPosition.x + collisionDirection.gridOffset.x,
+        y: nextDragGridPosition.y + collisionDirection.gridOffset.y,
+      };
       const swapCenter = calculateTileCenter(swapGridPosition, gridOrigin);
       const ignoredInstanceIds = new Set([
         currentDrag.instanceId,
@@ -1109,6 +1231,15 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
       );
 
       if (canSwap && collidingSprite !== undefined) {
+        console.debug("[MapScene] swap decided", {
+          collisionDirection: collisionDirection.direction,
+          nextDragGridPosition,
+          previousDragGridPosition,
+          swapGridPosition,
+          x: constrainedCenter.x,
+          y: constrainedCenter.y,
+        });
+
         swapAnimationsRef.current.set(collidingAllyTile.entity.instanceId, {
           from: {
             x: collidingSprite.x,
@@ -1203,6 +1334,7 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
 
     clearDragTimer();
     entityPositionsRef.current.set(activeDrag.instanceId, snappedPosition);
+    activeDrag.sprite.zIndex = activeDrag.previousZIndex;
 
     props.onTurnEnd(
       Array.from(entityPositionsRef.current.entries()).map(
@@ -1236,6 +1368,9 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
     }
 
     input.event.stopPropagation();
+    const previousZIndex = input.sprite.zIndex;
+
+    input.sprite.zIndex = DRAGGED_TILE_Z_INDEX;
 
     const startedAt = performance.now();
 
@@ -1244,6 +1379,7 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
       grabOffsetX: input.event.global.x - input.sprite.x,
       grabOffsetY: input.event.global.y - input.sprite.y,
       instanceId: input.instanceId,
+      previousZIndex,
       sprite: input.sprite,
       startedAt,
       targetX: input.sprite.x,
@@ -1311,9 +1447,10 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
         onPointerMove={moveDrag}
         onPointerUp={endDrag}
         onPointerUpOutside={endDrag}
+        sortableChildren
       >
-        <pixiGraphics draw={drawGrid} />
-        {renderableTiles.map((tile) => (
+        <pixiGraphics draw={drawGrid} zIndex={0} />
+        {renderableTiles.map((tile, index) => (
           <PixiMapTile
             baseTexture={baseTextures.get(tile.imageUrl)}
             gridOrigin={gridOrigin}
@@ -1323,6 +1460,7 @@ function PixiMapLayer(props: PixiMapLayerProps): React.ReactElement {
             onSpriteMount={mountSprite}
             onSpriteUnmount={unmountSprite}
             tile={tile}
+            zIndex={TILE_BASE_Z_INDEX + index}
           />
         ))}
       </pixiContainer>

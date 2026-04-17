@@ -1,8 +1,8 @@
 {
   "map": {
     "background": "assets/background/Background_001.webp",
-    "rows": 6,
-    "cols": 8,
+    "rows": 8,
+    "cols": 6,
     "timer": 5,
     "cells": [
       { "x": 0, "y": 0, "type": "ally1", "id": "char_hero_001" },
