@@ -74,7 +74,7 @@
     "skill_slots": {
       "1": "skill_basic_attack",
       "2": null,
-      "3": null,
+      "3": "skill_first_aid",
       "4": null
     },
     "STR": 50,
@@ -103,7 +103,7 @@
     "exp": 0,
     "skill_slots": {
       "1": "skill_basic_attack",
-      "2": null,
+      "2": "skill_guard_boost",
       "3": null,
       "4": null
     },
@@ -133,7 +133,7 @@
     "exp": 0,
     "skill_slots": {
       "1": "skill_basic_attack",
-      "2": null,
+      "2": "skill_weaken",
       "3": null,
       "4": null
     },
@@ -176,7 +176,7 @@
     "RES": 50,
     "LUK": 50,
     "current_grown_type": "Balanced",
-    "HP": 1000
+    "HP": 80
   },  {
     "id": "char_block_001",
     "name": "벽",
@@ -207,6 +207,64 @@
     "current_grown_type": "Balanced",
     "HP": 1000
  },  {
+    "id": "char_monster_002",
+    "name": "러시팽",
+    "type": "enemy",
+    "description": "돌진형 적",
+    "image_path": "assets/characters/monster_002.webp",
+    "tile_x": 200,
+    "tile_y": 220,
+    "tile_w": 512,
+    "tile_h": 512,
+    "level": 2,
+    "exp": 0,
+    "skill_slots": {
+      "1": "skill_basic_attack",
+      "2": null,
+      "3": null,
+      "4": null
+    },
+    "STR": 58,
+    "VIT": 42,
+    "DEX": 54,
+    "AGI": 62,
+    "AVD": 52,
+    "INT": 35,
+    "MND": 38,
+    "RES": 40,
+    "LUK": 45,
+    "current_grown_type": "Rush",
+    "HP": 70
+  },  {
+    "id": "char_monster_003",
+    "name": "와드쉘",
+    "type": "enemy",
+    "description": "방어형 적",
+    "image_path": "assets/characters/monster_003.webp",
+    "tile_x": 210,
+    "tile_y": 220,
+    "tile_w": 512,
+    "tile_h": 512,
+    "level": 3,
+    "exp": 0,
+    "skill_slots": {
+      "1": "skill_basic_attack",
+      "2": "skill_guard_boost",
+      "3": null,
+      "4": null
+    },
+    "STR": 48,
+    "VIT": 65,
+    "DEX": 42,
+    "AGI": 34,
+    "AVD": 36,
+    "INT": 40,
+    "MND": 52,
+    "RES": 62,
+    "LUK": 40,
+    "current_grown_type": "Ward",
+    "HP": 95
+  },  {
     "id": "char_trap_001",
     "name": "함정",
     "type": "trap",

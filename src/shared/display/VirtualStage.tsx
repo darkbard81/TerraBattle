@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
+import type { MotionMode, ResolutionMode } from "../../app/GameSettings.js";
 
 /**
  * 모든 씬이 공유하는 가상 화면 너비다.
  */
-export const VIRTUAL_STAGE_WIDTH = 1200;
+export const VIRTUAL_STAGE_WIDTH = 1080;
 
 /**
  * 모든 씬이 공유하는 가상 화면 높이다.
@@ -19,12 +20,22 @@ interface ViewportSize {
 }
 
 /**
+ * 가상 스테이지 크기를 CSS에 전달하는 스타일 값이다.
+ */
+type VirtualStageStyle = React.CSSProperties & {
+  readonly "--virtual-stage-width": string;
+  readonly "--virtual-stage-height": string;
+};
+
+/**
  * 가상 스테이지 렌더링에 필요한 입력값이다.
  */
 export interface VirtualStageProps {
   readonly ariaLabel: string;
   readonly backgroundImageUrl: string;
   readonly children: React.ReactNode;
+  readonly motionMode?: MotionMode;
+  readonly resolutionMode?: ResolutionMode;
 }
 
 /**
@@ -35,6 +46,19 @@ export interface VirtualStageProps {
  */
 function calculateFitScale(viewportSize: ViewportSize): number {
   return Math.min(
+    viewportSize.width / VIRTUAL_STAGE_WIDTH,
+    viewportSize.height / VIRTUAL_STAGE_HEIGHT,
+  );
+}
+
+/**
+ * 브라우저 크기를 기준으로 가상 스테이지의 채움 배율을 계산한다.
+ *
+ * @param viewportSize 브라우저 표시 영역 크기
+ * @returns 화면을 모두 덮는 배율
+ */
+function calculateFillScale(viewportSize: ViewportSize): number {
+  return Math.max(
     viewportSize.width / VIRTUAL_STAGE_WIDTH,
     viewportSize.height / VIRTUAL_STAGE_HEIGHT,
   );
@@ -53,7 +77,7 @@ function getViewportSize(): ViewportSize {
 }
 
 /**
- * 씬마다 공유하는 1200x1920 가상 좌표계 스테이지를 표시한다.
+ * 씬마다 공유하는 가상 좌표계 스테이지를 표시한다.
  *
  * @param props 가상 스테이지 설정과 자식 UI
  * @returns 브라우저 크기에 맞춰 fit 되는 가상 스테이지
@@ -77,16 +101,29 @@ export function VirtualStage(
     };
   }, []);
 
-  const stageScale = calculateFitScale(viewportSize);
+  const stageScale =
+    props.resolutionMode === "fill"
+      ? calculateFillScale(viewportSize)
+      : calculateFitScale(viewportSize);
+  const stageStyle: VirtualStageStyle = {
+    "--virtual-stage-height": `${VIRTUAL_STAGE_HEIGHT}px`,
+    "--virtual-stage-width": `${VIRTUAL_STAGE_WIDTH}px`,
+    backgroundImage: `url(${props.backgroundImageUrl})`,
+    transform: `translate(-50%, -50%) scale(${stageScale})`,
+  };
 
   return (
-    <main className="virtual-stage-root" aria-label={props.ariaLabel}>
+    <main
+      className={
+        props.motionMode === "reduced"
+          ? "virtual-stage-root virtual-stage-root--reduced-motion"
+          : "virtual-stage-root"
+      }
+      aria-label={props.ariaLabel}
+    >
       <div
         className="virtual-stage"
-        style={{
-          backgroundImage: `url(${props.backgroundImageUrl})`,
-          transform: `translate(-50%, -50%) scale(${stageScale})`,
-        }}
+        style={stageStyle}
       >
         {props.children}
       </div>

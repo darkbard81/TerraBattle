@@ -1,4 +1,5 @@
 import React from "react";
+import type { GameSettings } from "../../app/GameSettings.js";
 import titleBackgroundUrl from "../../assets/background/Title.webp";
 import { VirtualStage } from "../../shared/display/VirtualStage.js";
 
@@ -6,6 +7,7 @@ import { VirtualStage } from "../../shared/display/VirtualStage.js";
  * 타이틀 화면 입력값이다.
  */
 export interface TitleScreenProps {
+  readonly settings: GameSettings;
   readonly onNewGame: () => void;
 }
 
@@ -20,6 +22,8 @@ export function TitleScreen(props: TitleScreenProps): React.ReactElement {
     <VirtualStage
       ariaLabel="TerraBattle 타이틀 화면"
       backgroundImageUrl={titleBackgroundUrl}
+      motionMode={props.settings.motionMode}
+      resolutionMode={props.settings.resolutionMode}
     >
       <nav className="title-screen__menu" aria-label="타이틀 메뉴">
         <button

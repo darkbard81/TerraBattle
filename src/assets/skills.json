@@ -43,5 +43,35 @@
     "hit_count": 1,
     "duration_turns": 3,
     "description": "3턴 동안 VIT를 상승시킨다"
+  },
+  {
+    "id": "skill_first_aid",
+    "name": "응급 회복",
+    "replaceable": true,
+    "proc_chance": 70,
+    "effect_type": "heal",
+    "attack_type": "auto",
+    "target_side": "self",
+    "source_stat": "MND",
+    "affected_stat": null,
+    "multiplier": 0.35,
+    "hit_count": 1,
+    "duration_turns": 0,
+    "description": "자신의 HP를 회복한다"
+  },
+  {
+    "id": "skill_weaken",
+    "name": "약화",
+    "replaceable": true,
+    "proc_chance": 55,
+    "effect_type": "debuff",
+    "attack_type": "auto",
+    "target_side": "enemy",
+    "source_stat": "INT",
+    "affected_stat": "VIT",
+    "multiplier": 0.85,
+    "hit_count": 1,
+    "duration_turns": 2,
+    "description": "적의 방어 능력을 낮춘다"
   }
 ]

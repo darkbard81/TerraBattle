@@ -31,7 +31,17 @@
 - An enemy is attacked when it is horizontally or vertically sandwiched by allied units.
 - Direct attack is not the default rule; sandwich formation is the main attack rule.
 - The final board arrangement is the basis for battle resolution.
-  
+
+### Battle end rules
+- Default battle end rule is `annihilation`.
+- If all enemies are removed, the player wins.
+- If allied units are reduced to 1 or fewer, the player loses.
+- The defeat threshold is 1 allied unit because sandwich attacks require at least 2 allied units.
+
+### Round rules
+- `ally turn` + `enemy turn` = 1 `round`.
+- `round` increases after `enemy turn` ends.
+
 ## Design note
 
 The board state remains grid-based.

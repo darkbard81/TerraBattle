@@ -11,6 +11,8 @@
     "dev": "vite",
     "editor": "vite --open /editor/",
     "build": "tsc -p tsconfig.typecheck.json --noEmit && vite build",
+    "start": "npm run serve:dist",
+    "serve:dist": "tsc -p tsconfig.server.json && node .server/scripts/serve-dist.js",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
     "test": "vitest",
@@ -35,6 +37,7 @@
   },
   "homepage": "https://github.com/darkbard81/TerraBattle#readme",
   "devDependencies": {
+    "@types/node": "^20.19.41",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",

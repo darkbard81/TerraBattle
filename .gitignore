@@ -1,5 +1,7 @@
 node_modules/
 dist/
+.server/
 docs/
 .DS_Store
 npm-debug.log*
+.hatch-pet-runs

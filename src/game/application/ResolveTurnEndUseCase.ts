@@ -28,6 +28,11 @@ export type BattleSkillEffectType = "damage" | "buff" | "debuff" | "heal";
 export type BattleSkillTargetSide = "self" | "ally" | "enemy";
 
 /**
+ * 전투 판정을 수행하는 기준 진영이다.
+ */
+export type BattleSide = "ally" | "enemy";
+
+/**
  * 캐릭터 스킬 슬롯 데이터다.
  */
 export interface BattleCharacterSkillSlots {
@@ -97,19 +102,31 @@ export interface TurnEndBoardUnit {
 }
 
 /**
+ * 전투 중 적용 중인 능력치 효과다.
+ */
+export interface BattleActiveStatEffect {
+  readonly multiplier: number;
+  readonly remainingTurns: number;
+  readonly stat: BattleStatKey;
+  readonly targetInstanceId: string;
+}
+
+/**
  * turn 종료 해석 입력값이다.
  */
 export interface ResolveTurnEndInput {
+  readonly activeStatEffects?: readonly BattleActiveStatEffect[];
   readonly units: readonly TurnEndBoardUnit[];
   readonly characters: readonly BattleCharacterData[];
   readonly skills: readonly BattleSkillData[];
   readonly random: () => number;
+  readonly attackingSide?: BattleSide;
 }
 
 /**
  * 개별 타격 판정 결과다.
  */
-export type TurnHitResult = "hit" | "miss";
+export type TurnHitResult = "hit" | "miss" | "heal" | "buff" | "debuff";
 
 /**
  * 개별 타격 계산 결과다.
@@ -183,6 +200,15 @@ interface ResolveSkillDamageInput {
   readonly startEventIndex: number;
 }
 
+interface ResolveSkillEffectInput {
+  readonly attackerUnit: TurnEndBoardUnit;
+  readonly attacker: BattleCharacterData;
+  readonly eventIndex: number;
+  readonly skill: BattleSkillData;
+  readonly target: BattleCharacterData;
+  readonly targetUnit: TurnEndBoardUnit;
+}
+
 /**
  * turn 종료 시점의 최종 좌표를 기반으로 샌드위치 공격을 계산한다.
  */
@@ -206,10 +232,23 @@ export class ResolveTurnEndUseCase {
     const hitResultEvents: TurnHitResultEvent[] = [];
     const sandwichAttackEvents: TurnSandwichAttackEvent[] = [];
 
-    input.units.forEach((targetUnit) => {
-      const target = charactersById.get(targetUnit.characterId);
+    const attackingSide = input.attackingSide ?? "ally";
 
-      if (target === undefined || !this.isEnemy(target)) {
+    input.units.forEach((targetUnit) => {
+      const targetBase = charactersById.get(targetUnit.characterId);
+      const target =
+        targetBase === undefined
+          ? undefined
+          : this.applyActiveStatEffects(
+              targetBase,
+              targetUnit.instanceId,
+              input.activeStatEffects ?? [],
+            );
+
+      if (
+        target === undefined ||
+        !this.isOpposingSide(target, attackingSide)
+      ) {
         return;
       }
 
@@ -217,6 +256,7 @@ export class ResolveTurnEndUseCase {
         targetUnit,
         unitsByPosition,
         charactersById,
+        attackingSide,
       });
 
       sandwichPairs.forEach((pair) => {
@@ -225,7 +265,15 @@ export class ResolveTurnEndUseCase {
         );
 
         [pair.firstAttacker, pair.secondAttacker].forEach((attackerUnit) => {
-          const attacker = charactersById.get(attackerUnit.characterId);
+          const attackerBase = charactersById.get(attackerUnit.characterId);
+          const attacker =
+            attackerBase === undefined
+              ? undefined
+              : this.applyActiveStatEffects(
+                  attackerBase,
+                  attackerUnit.instanceId,
+                  input.activeStatEffects ?? [],
+                );
 
           if (attacker === undefined) {
             return;
@@ -286,10 +334,26 @@ export class ResolveTurnEndUseCase {
 
       if (
         skill === undefined ||
-        skill.effect_type !== "damage" ||
-        skill.target_side !== "enemy" ||
         !this.isPercentRollSuccessful(skill.proc_chance, input.random)
       ) {
+        return;
+      }
+
+      if (skill.effect_type !== "damage") {
+        input.hitResultEvents.push(
+          this.createSkillEffectEvent({
+            attacker: input.attacker,
+            attackerUnit: input.attackerUnit,
+            eventIndex: input.hitResultEvents.length,
+            skill,
+            target: input.target,
+            targetUnit: input.targetUnit,
+          }),
+        );
+        return;
+      }
+
+      if (skill.target_side !== "enemy") {
         return;
       }
 
@@ -305,6 +369,80 @@ export class ResolveTurnEndUseCase {
 
       input.hitResultEvents.push(...skillHitResultEvents);
     });
+  }
+
+  private createSkillEffectEvent(input: ResolveSkillEffectInput): TurnHitResultEvent {
+    const effectTarget = this.resolveEffectTarget(input);
+    const amount =
+      input.skill.effect_type === "heal"
+        ? this.calculateHealAmount(input.attacker, input.skill)
+        : 0;
+
+    return {
+      attackerCharacterId: input.attacker.id,
+      attackerInstanceId: input.attackerUnit.instanceId,
+      damage: amount,
+      eventId: [
+        effectTarget.unit.instanceId,
+        input.attackerUnit.instanceId,
+        input.skill.id,
+        input.eventIndex,
+      ].join(":"),
+      hitIndex: 1,
+      result: input.skill.effect_type === "damage" ? "hit" : input.skill.effect_type,
+      skillId: input.skill.id,
+      skillName: input.skill.name,
+      targetCharacterId: effectTarget.character.id,
+      targetInstanceId: effectTarget.unit.instanceId,
+      targetX: effectTarget.unit.x,
+      targetY: effectTarget.unit.y,
+    };
+  }
+
+  private resolveEffectTarget(input: ResolveSkillEffectInput): {
+    readonly character: BattleCharacterData;
+    readonly unit: TurnEndBoardUnit;
+  } {
+    if (input.skill.target_side === "enemy") {
+      return {
+        character: input.target,
+        unit: input.targetUnit,
+      };
+    }
+
+    return {
+      character: input.attacker,
+      unit: input.attackerUnit,
+    };
+  }
+
+  private calculateHealAmount(
+    attacker: BattleCharacterData,
+    skill: BattleSkillData,
+  ): number {
+    const sourceValue = attacker[skill.source_stat];
+
+    return Math.floor(Math.max(1, sourceValue * skill.multiplier));
+  }
+
+  private applyActiveStatEffects(
+    character: BattleCharacterData,
+    instanceId: string,
+    activeEffects: readonly BattleActiveStatEffect[],
+  ): BattleCharacterData {
+    const matchingEffects = activeEffects.filter(
+      (effect) =>
+        effect.targetInstanceId === instanceId && effect.remainingTurns > 0,
+    );
+
+    if (matchingEffects.length === 0) {
+      return character;
+    }
+
+    return matchingEffects.reduce<BattleCharacterData>((current, effect) => ({
+      ...current,
+      [effect.stat]: Math.max(1, Math.floor(current[effect.stat] * effect.multiplier)),
+    }), character);
   }
 
   private resolveSkillHitResults(
@@ -387,6 +525,7 @@ export class ResolveTurnEndUseCase {
     readonly targetUnit: TurnEndBoardUnit;
     readonly unitsByPosition: ReadonlyMap<string, TurnEndBoardUnit>;
     readonly charactersById: ReadonlyMap<string, BattleCharacterData>;
+    readonly attackingSide: BattleSide;
   }): readonly SandwichPair[] {
     const horizontalPair = this.findSandwichPair({
       charactersById: input.charactersById,
@@ -399,6 +538,7 @@ export class ResolveTurnEndUseCase {
         y: input.targetUnit.y,
       },
       unitsByPosition: input.unitsByPosition,
+      attackingSide: input.attackingSide,
     });
     const verticalPair = this.findSandwichPair({
       charactersById: input.charactersById,
@@ -411,6 +551,7 @@ export class ResolveTurnEndUseCase {
         y: input.targetUnit.y + 1,
       },
       unitsByPosition: input.unitsByPosition,
+      attackingSide: input.attackingSide,
     });
 
     return [horizontalPair, verticalPair].filter(
@@ -423,6 +564,7 @@ export class ResolveTurnEndUseCase {
     readonly secondPosition: { readonly x: number; readonly y: number };
     readonly unitsByPosition: ReadonlyMap<string, TurnEndBoardUnit>;
     readonly charactersById: ReadonlyMap<string, BattleCharacterData>;
+    readonly attackingSide: BattleSide;
   }): SandwichPair | undefined {
     const firstAttacker = input.unitsByPosition.get(
       this.createPositionKey(input.firstPosition.x, input.firstPosition.y),
@@ -434,8 +576,8 @@ export class ResolveTurnEndUseCase {
     if (
       firstAttacker === undefined ||
       secondAttacker === undefined ||
-      !this.isAllyUnit(firstAttacker, input.charactersById) ||
-      !this.isAllyUnit(secondAttacker, input.charactersById)
+      !this.isSideUnit(firstAttacker, input.charactersById, input.attackingSide) ||
+      !this.isSideUnit(secondAttacker, input.charactersById, input.attackingSide)
     ) {
       return undefined;
     }
@@ -520,21 +662,23 @@ export class ResolveTurnEndUseCase {
     ].filter((skillId): skillId is string => skillId !== null);
   }
 
-  private isAllyUnit(
+  private isSideUnit(
     unit: TurnEndBoardUnit,
     charactersById: ReadonlyMap<string, BattleCharacterData>,
+    side: BattleSide,
   ): boolean {
     const character = charactersById.get(unit.characterId);
 
-    return character !== undefined && this.isAlly(character);
+    return character?.type === side;
   }
 
-  private isAlly(character: BattleCharacterData): boolean {
-    return character.type === "ally";
-  }
-
-  private isEnemy(character: BattleCharacterData): boolean {
-    return character.type === "enemy";
+  private isOpposingSide(
+    character: BattleCharacterData,
+    attackingSide: BattleSide,
+  ): boolean {
+    return attackingSide === "ally"
+      ? character.type === "enemy"
+      : character.type === "ally";
   }
 
   private isPercentRollSuccessful(

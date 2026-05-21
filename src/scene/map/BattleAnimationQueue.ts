@@ -172,10 +172,7 @@ export class BattleAnimationQueue {
       animationId: `${damageText.event.eventId}:damage:${sequenceId}:${index}`,
       damage: damageText.event.damage,
       delayMs: index * input.durations.damageTextStaggerMs,
-      label:
-        damageText.event.result === "miss"
-          ? "MISS"
-          : damageText.event.damage.toString(),
+      label: this.createDamageTextLabel(damageText.event),
       result: damageText.event.result,
       stagePosition: damageText.stagePosition,
     }));
@@ -310,6 +307,26 @@ export class BattleAnimationQueue {
       input.baseDurationMs +
       Math.max(0, input.animationCount - 1) * input.staggerMs
     );
+  }
+
+  private createDamageTextLabel(event: TurnHitResultEvent): string {
+    if (event.result === "miss") {
+      return "MISS";
+    }
+
+    if (event.result === "heal") {
+      return `+${event.damage}`;
+    }
+
+    if (event.result === "buff") {
+      return "BUFF";
+    }
+
+    if (event.result === "debuff") {
+      return "DEBUFF";
+    }
+
+    return event.damage.toString();
   }
 
   private emitState(state: BattleAnimationQueueState): void {
